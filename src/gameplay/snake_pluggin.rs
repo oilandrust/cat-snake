@@ -1,4 +1,4 @@
-use bevy::{math::Vec3Swizzles, prelude::*, transform::TransformSystem};
+use bevy::{prelude::*, transform::TransformSystem};
 use bevy_prototype_lyon::{
     entity::ShapeBundle,
     prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
@@ -8,9 +8,7 @@ use std::{collections::VecDeque, mem};
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::{
-        to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE,
-    },
+    gameplay::game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS},
     gameplay::level_pluggin::LevelEntity,
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
@@ -89,9 +87,6 @@ pub struct SnakePart {
     pub part_index: usize,
 }
 
-#[derive(Component)]
-pub struct SnakeEye;
-
 #[derive(Bundle)]
 pub struct SnakePartBundle {
     pub part: SnakePart,
@@ -119,19 +114,21 @@ impl SnakePartBundle {
 
 #[derive(Component)]
 pub struct PartClipper {
-    pub clip_position: IVec2,
+    pub clip_position: IVec3,
 }
+
+pub type SnakeElement = (IVec3, IVec3);
 
 #[derive(Component, Debug)]
 pub struct Snake {
-    parts: VecDeque<(IVec2, IVec2)>,
+    parts: VecDeque<SnakeElement>,
     index: i32,
 }
 
 pub struct SpawnSnakeEvent;
 
 impl Snake {
-    pub fn parts(&self) -> &VecDeque<(IVec2, IVec2)> {
+    pub fn parts(&self) -> &VecDeque<SnakeElement> {
         &self.parts
     }
 
@@ -143,22 +140,22 @@ impl Snake {
         self.parts.len()
     }
 
-    pub fn move_back(&mut self, part: &(IVec2, IVec2)) {
+    pub fn move_back(&mut self, part: &SnakeElement) {
         self.parts.push_back(*part);
         self.parts.pop_front();
     }
 
-    pub fn move_forward(&mut self, direction: IVec2) {
+    pub fn move_forward(&mut self, direction: IVec3) {
         self.parts
             .push_front((self.head_position() + direction, direction));
         self.parts.pop_back();
     }
 
-    pub fn head_position(&self) -> IVec2 {
+    pub fn head_position(&self) -> IVec3 {
         self.parts.front().unwrap().0
     }
 
-    pub fn head_direction(&self) -> IVec2 {
+    pub fn head_direction(&self) -> IVec3 {
         self.parts.front().unwrap().1
     }
 
@@ -172,36 +169,36 @@ impl Snake {
         self.parts.pop_back();
     }
 
-    pub fn tail(&self) -> (IVec2, IVec2) {
+    pub fn tail(&self) -> SnakeElement {
         *self.parts.back().unwrap()
     }
 
-    pub fn tail_position(&self) -> IVec2 {
+    pub fn tail_position(&self) -> IVec3 {
         self.parts.back().unwrap().0
     }
 
     pub fn is_standing(&self) -> bool {
-        (self.parts.front().unwrap().0.y - self.parts.back().unwrap().0.y)
+        (self.parts.front().unwrap().0.z - self.parts.back().unwrap().0.z)
             == (self.len() - 1) as i32
     }
 
-    pub fn occupies_position(&self, position: IVec2) -> bool {
+    pub fn occupies_position(&self, position: IVec3) -> bool {
         self.parts.iter().any(|part| part.0 == position)
     }
 
     pub fn fall_one_unit(&mut self) {
         for (position, _) in self.parts.iter_mut() {
-            *position += IVec2::NEG_Y;
+            *position += IVec3::NEG_Y;
         }
     }
 
-    pub fn translate(&mut self, offset: IVec2) {
+    pub fn translate(&mut self, offset: IVec3) {
         for (position, _) in self.parts.iter_mut() {
             *position += offset;
         }
     }
 
-    pub fn set_parts(&mut self, parts: Vec<(IVec2, IVec2)>) {
+    pub fn set_parts(&mut self, parts: Vec<SnakeElement>) {
         self.parts = parts.into();
     }
 }
@@ -224,25 +221,7 @@ pub fn spawn_snake(
 
     spawn_command.with_children(|parent| {
         for (index, _) in snake_template.iter().enumerate() {
-            let mut entity = parent.spawn(SnakePartBundle::new(snake_index, index));
-
-            if index == 0 {
-                entity.with_children(|parent| {
-                    parent.spawn((
-                        SpriteBundle {
-                            sprite: Sprite {
-                                color: Color::BLACK,
-                                custom_size: Some(SNAKE_EYE_SIZE),
-                                ..default()
-                            },
-                            transform: Transform::from_xyz(5.0, 5.0, 1.0),
-                            ..default()
-                        },
-                        LevelEntity,
-                        SnakeEye,
-                    ));
-                });
-            }
+            parent.spawn(SnakePartBundle::new(snake_index, index));
         }
     });
 
@@ -274,23 +253,23 @@ pub fn update_snake_transforms_system(
     >,
 ) {
     for (snake, mut transform, move_command, pushed_anim, fall) in &mut snake_query {
-        let fall_offset = fall.map_or(Vec2::ZERO, |gravity_fall| gravity_fall.relative_y * Vec2::Y);
+        let fall_offset = fall.map_or(Vec3::ZERO, |gravity_fall| gravity_fall.relative_z * Vec3::Y);
 
-        let push_offset = pushed_anim.map_or(Vec2::ZERO, |command| {
+        let push_offset = pushed_anim.map_or(Vec3::ZERO, |command| {
             let initial_offset = -GRID_TO_WORLD_UNIT * command.direction;
-            initial_offset.lerp(Vec2::ZERO, command.lerp_time)
+            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
-        let anim_direction = snake.head_direction().as_vec2();
-        let move_offset = move_command.map_or(Vec2::ZERO, |command| {
+        let anim_direction = snake.head_direction().as_vec3();
+        let move_offset = move_command.map_or(Vec3::ZERO, |command| {
             let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-            initial_offset.lerp(Vec2::ZERO, command.lerp_time)
+            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
         transform.translation =
-            (to_world(snake.head_position()) + fall_offset + push_offset + move_offset).extend(0.0);
+            to_world(snake.head_position()) + fall_offset + push_offset + move_offset;
 
-        let direction_3 = snake.head_direction().extend(0).as_vec3();
+        let direction_3 = snake.head_direction().as_vec3();
         let ortho_dir = Vec3::Z.cross(direction_3);
 
         transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Z));
@@ -330,6 +309,10 @@ fn update_snake_parts_mesh_system(
 
         let (position, direction) = snake.parts[part.part_index];
         let position = position - snake.head_position();
+
+        let position = position.truncate();
+        let direction = direction.truncate();
+
         let ortho_dir = IVec2::new(-direction.y, direction.x);
 
         part_vertices.clear();
@@ -354,10 +337,11 @@ fn update_snake_parts_mesh_system(
                 anim_offset = initial_offset.lerp(Vec2::ZERO, command.lerp_time);
 
                 if let Some((_, next_direction)) = next_part {
+                    let next_direction = next_direction.truncate();
                     let next_dir_relative =
                         IVec2::new(next_direction.dot(direction), next_direction.dot(ortho_dir));
 
-                    if direction != *next_direction && corner.x < 0 {
+                    if direction != next_direction && corner.x < 0 {
                         if corner.dot(next_dir_relative) > 0 {
                             if command.lerp_time < 0.5 {
                                 let mut extra_vertex_offset = -GRID_TO_WORLD_UNIT * anim_direction;
@@ -383,10 +367,11 @@ fn update_snake_parts_mesh_system(
                 }
 
                 if let Some((_, prev_direction)) = prev_part {
+                    let prev_direction = prev_direction.truncate();
                     let prev_dir_relative =
                         IVec2::new(prev_direction.dot(direction), prev_direction.dot(ortho_dir));
 
-                    if direction != *prev_direction && corner.x > 0 {
+                    if direction != prev_direction && corner.x > 0 {
                         if corner.dot(prev_dir_relative) < 0 {
                             if command.lerp_time < 0.5 {
                                 anim_offset = direction.as_vec2()
@@ -415,23 +400,24 @@ fn update_snake_parts_mesh_system(
         }
 
         // We compensate for the move offset that is allready added to the snake transform.
-        let anim_direction = snake.head_direction().as_vec2();
-        let move_offset = move_command.map_or(Vec2::ZERO, |command| {
-            let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-            initial_offset.lerp(Vec2::ZERO, command.lerp_time)
+        let anim_direction = snake.head_direction();
+        let move_offset = move_command.map_or(Vec3::ZERO, |command| {
+            let initial_offset = -anim_direction.as_vec3();
+            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
         // Anim offset.
         part_vertices.iter_mut().for_each(|vertex| {
-            *vertex -= move_offset;
+            *vertex -= move_offset.truncate();
         });
 
         // Clip in world space for end of level anim.
         if let Some(modifier) = clipper {
             let world_clip_position = to_world(modifier.clip_position);
             part_vertices.iter_mut().for_each(|vertex| {
-                let offset = (*vertex + transform.translation.truncate() - world_clip_position)
-                    .dot(direction.as_vec2());
+                let offset = (*vertex + transform.translation.truncate()
+                    - world_clip_position.truncate())
+                .dot(direction.as_vec2());
                 if offset > 0.0 {
                     *vertex -= offset * direction.as_vec2();
                 }
@@ -463,24 +449,7 @@ pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: En
         .insert(Active)
         .with_children(|parent| {
             for (index, _) in snake.parts().iter().enumerate() {
-                let mut entity = parent.spawn(SnakePartBundle::new(snake.index(), index));
-
-                if index == 0 {
-                    entity.with_children(|parent| {
-                        parent.spawn((
-                            SpriteBundle {
-                                sprite: Sprite {
-                                    color: Color::BLACK,
-                                    custom_size: Some(SNAKE_EYE_SIZE),
-                                    ..default()
-                                },
-                                transform: Transform::from_xyz(5.0, 5.0, 1.0),
-                                ..default()
-                            },
-                            LevelEntity,
-                        ));
-                    });
-                }
+                parent.spawn(SnakePartBundle::new(snake.index(), index));
             }
         });
 }
@@ -532,9 +501,7 @@ pub fn select_snake_mouse_system(
         let window_size = Vec2::new(window.width(), window.height());
         let ndc = (mouse_position / window_size) * 2.0 - Vec2::ONE;
         let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
-        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
-
-        world_pos.xy()
+        ndc_to_world.project_point3(ndc.extend(-1.0))
     };
 
     let mouse_grid_position = to_grid(mouse_world_position);

@@ -24,7 +24,7 @@ impl<'a> SnakeCommands<'a> {
         }
     }
 
-    pub fn player_move(&mut self, snake: &'a mut Snake, direction: IVec2) -> PlayerMoveCommand {
+    pub fn player_move(&mut self, snake: &'a mut Snake, direction: IVec3) -> PlayerMoveCommand {
         PlayerMoveCommand {
             level_instance: self.level_instance,
             history: self.history,
@@ -111,7 +111,7 @@ pub struct PlayerMoveCommand<'a> {
     snake: &'a mut Snake,
     other_snake: Option<&'a mut Snake>,
     food: Option<&'a Food>,
-    direction: IVec2,
+    direction: IVec3,
 }
 
 impl<'a> PlayerMoveCommand<'a> {

@@ -34,13 +34,13 @@ pub struct ClearLevelEvent;
 pub struct LevelEntity;
 
 #[derive(Component, Clone, Copy)]
-pub struct Food(pub IVec2);
+pub struct Food(pub IVec3);
 
 #[derive(Component, Clone, Copy)]
-pub struct Spike(pub IVec2);
+pub struct Spike(pub IVec3);
 
 #[derive(Component, Clone, Copy)]
-pub struct Goal(pub IVec2);
+pub struct Goal(pub IVec3);
 
 #[derive(Resource)]
 pub struct CurrentLevelId(pub usize);
@@ -186,7 +186,7 @@ fn spawn_level_entities_system(
     }
 
     // Spawn the ground sprites
-    for (position, cell) in level_template.grid.iter() {
+    for (position, cell) in level_template.grid.iter::<IVec2>() {
         if cell != Cell::Wall {
             continue;
         }
@@ -199,14 +199,14 @@ fn spawn_level_entities_system(
                     ..default()
                 },
                 transform: Transform {
-                    translation: to_world(position).extend(0.0),
+                    translation: to_world(position.extend(0)),
                     ..default()
                 },
                 ..default()
             })
             .insert(LevelEntity);
 
-        level_instance.mark_position_occupied(position, LevelEntityType::Wall);
+        level_instance.mark_position_occupied(position.extend(0), LevelEntityType::Wall);
     }
 
     // Spawn the food sprites.
@@ -234,7 +234,7 @@ fn spawn_level_entities_system(
 
         let path = path_builder.build();
 
-        let goal_world_position = to_world(level_template.goal_position).extend(-1.0);
+        let goal_world_position = to_world(level_template.goal_position);
 
         commands.spawn((
             GeometryBuilder::build_as(
@@ -251,7 +251,7 @@ fn spawn_level_entities_system(
     }
 }
 
-pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &mut LevelInstance) {
     let mut path_builder = PathBuilder::new();
     let subdivisions = 8;
     for i in 0..subdivisions {
@@ -270,7 +270,7 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &m
             &path,
             DrawMode::Fill(FillMode::color(SPIKE_COLOR)),
             Transform {
-                translation: to_world(*position).extend(0.0),
+                translation: to_world(*position),
                 ..default()
             },
         ))
@@ -280,7 +280,7 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &m
     level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
 }
 
-pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+pub fn spawn_food(commands: &mut Commands, position: &IVec3, level_instance: &mut LevelInstance) {
     let shape = shapes::Circle {
         radius: 0.8 * GRID_TO_WORLD_UNIT / 2.0,
         ..Default::default()
@@ -291,7 +291,7 @@ pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mu
             &shape,
             DrawMode::Fill(FillMode::color(FOOD_COLOR)),
             Transform {
-                translation: to_world(*position).extend(0.0),
+                translation: to_world(*position),
                 ..default()
             },
         ))

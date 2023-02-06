@@ -2,7 +2,6 @@ use args::Args;
 use bevy::prelude::*;
 use bevy_kira_audio::{Audio, AudioControl, AudioPlugin, AudioSource};
 use bevy_tweening::TweeningPlugin;
-use environment::EnvironmentPlugin;
 use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_pluggin::*;
 use gameplay::level_pluggin::{
@@ -21,7 +20,6 @@ use menus::MenuPlugin;
 use tools::dev_tools_pluggin::DevToolsPlugin;
 
 pub mod args;
-mod environment;
 mod gameplay;
 mod level;
 mod menus;
@@ -58,7 +56,6 @@ impl Plugin for GamePlugin {
             .add_plugin(CameraPlugin)
             .add_plugin(DevToolsPlugin)
             .add_plugin(TweeningPlugin)
-            .add_plugin(EnvironmentPlugin)
             .insert_resource(self.args.clone())
             .insert_resource(NextLevel(self.args.level.unwrap_or(0)));
 

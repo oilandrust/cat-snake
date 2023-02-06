@@ -1,19 +1,18 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 
-pub const GRID_TO_WORLD_UNIT: f32 = 35.;
+pub const GRID_TO_WORLD_UNIT: f32 = 1.;
 pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
 pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
-pub const SNAKE_EYE_SIZE: Vec2 = Vec2::splat(5.);
 pub const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
 pub const MOVE_START_VELOCITY: f32 = 180.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
 pub const GRAVITY: f32 = 300.0;
 
-pub const UP: IVec2 = IVec2::Y;
-pub const DOWN: IVec2 = IVec2::NEG_Y;
-pub const RIGHT: IVec2 = IVec2::X;
-pub const LEFT: IVec2 = IVec2::NEG_X;
+pub const UP: IVec3 = IVec3::Y;
+pub const DOWN: IVec3 = IVec3::NEG_Y;
+pub const RIGHT: IVec3 = IVec3::X;
+pub const LEFT: IVec3 = IVec3::NEG_X;
 
 macro_rules! rgb_u8 {
     ($r:expr, $g:expr, $b:expr) => {
@@ -50,14 +49,12 @@ pub const SNAKE_COLORS: [[Color; 2]; 3] = [
     [rgb_u8!(66, 135, 245), rgb_u8!(105, 159, 245)],
 ];
 
-pub fn to_world(position: IVec2) -> Vec2 {
-    (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
+pub fn to_world(position: IVec3) -> Vec3 {
+    position.as_vec3() + 0.5
 }
 
-pub fn to_grid(position: Vec2) -> IVec2 {
-    (position * GRID_TO_WORLD_UNIT_INVERSE - 0.5)
-        .round()
-        .as_ivec2()
+pub fn to_grid(position: Vec3) -> IVec3 {
+    (position - 0.5).round().as_ivec3()
 }
 
 #[derive(Resource, Reflect, InspectorOptions)]

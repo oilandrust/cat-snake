@@ -1,7 +1,7 @@
 use std::iter::once;
 
 use anyhow::{bail, Result};
-use bevy::{prelude::*, utils::HashSet};
+use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
 use game_grid::*;
 use thiserror::Error;
 
@@ -32,16 +32,16 @@ pub enum Cell {
     SnakePart(char),
 }
 
-pub type SnakeElement = (IVec2, IVec2);
+pub type SnakeElement = (IVec3, IVec3);
 pub type SnakeTemplate = Vec<SnakeElement>;
 
 #[derive(Debug, Clone, Resource)]
 pub struct LevelTemplate {
     pub grid: Grid<Cell>,
-    pub goal_position: IVec2,
+    pub goal_position: IVec3,
     pub initial_snakes: Vec<SnakeTemplate>,
-    pub food_positions: Vec<IVec2>,
-    pub spike_positions: Vec<IVec2>,
+    pub food_positions: Vec<IVec3>,
+    pub spike_positions: Vec<IVec3>,
 }
 
 #[derive(Debug, Error)]
@@ -82,7 +82,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
         {
             visited.insert(current_position);
             for search_dir in search_dirs.iter() {
-                let new_position = current_position + *search_dir;
+                let new_position = current_position + search_dir.truncate();
                 if !grid.is_in_bounds(new_position) || visited.contains(&new_position) {
                     continue;
                 }
@@ -95,6 +95,11 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
             }
         }
     }
+
+    let parts: Vec<IVec3> = parts
+        .into_iter()
+        .map(|position| position.extend(0))
+        .collect();
 
     if parts.len() < 2 {
         bail!(ParseLevelError::InvalidSnake);
@@ -144,7 +149,7 @@ impl LevelTemplate {
         // Set the cells where the snakes are as empty, they are managed as part of the game state.
         for snake in &snakes {
             for part in snake {
-                grid.set_cell(part.0, Cell::Empty);
+                grid.set_cell(part.0.xy(), Cell::Empty);
             }
         }
 
@@ -154,32 +159,32 @@ impl LevelTemplate {
             .position(|&cell| cell == Cell::Goal)
             .ok_or(ParseLevelError::MissingLevelGoal)?;
 
-        let goal_position = grid.position_for_index(goal_index);
+        let goal_position = grid.position_for_index::<IVec2>(goal_index).extend(0);
 
-        grid.set_cell(goal_position, Cell::Empty);
+        grid.set_cell(goal_position.xy(), Cell::Empty);
 
         // Find the food positons.
-        let food_positions: Vec<IVec2> = grid
-            .iter()
+        let food_positions: Vec<IVec3> = grid
+            .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Food)
-            .map(|(position, _)| position)
+            .map(|(position, _)| position.extend(0))
             .collect();
 
         // And set empty.
         for position in &food_positions {
-            grid.set_cell(*position, Cell::Empty);
+            grid.set_cell(position.xy(), Cell::Empty);
         }
 
         // Find the spikes positons.
-        let spike_positions: Vec<IVec2> = grid
-            .iter()
+        let spike_positions: Vec<IVec3> = grid
+            .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Spike)
-            .map(|(position, _)| position)
+            .map(|(position, _)| position.extend(0))
             .collect();
 
         // And set empty.
         for position in &spike_positions {
-            grid.set_cell(*position, Cell::Empty);
+            grid.set_cell(position.xy(), Cell::Empty);
         }
 
         Ok(LevelTemplate {

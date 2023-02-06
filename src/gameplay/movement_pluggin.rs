@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     level_pluggin::Goal,
-    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart, SnakePartBundle},
+    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeElement, SnakePart, SnakePartBundle},
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -36,7 +36,7 @@ pub struct MoveCommand {
 
 #[derive(Component, Default)]
 pub struct PushedAnim {
-    pub direction: Vec2,
+    pub direction: Vec3,
     velocity: f32,
     pub lerp_time: f32,
 }
@@ -44,14 +44,14 @@ pub struct PushedAnim {
 #[derive(Component, Copy, Clone)]
 pub struct GravityFall {
     velocity: f32,
-    pub relative_y: f32,
+    pub relative_z: f32,
     pub grid_distance: i32,
 }
 
 #[derive(Component, Clone)]
 pub struct LevelExitAnim {
     pub distance_to_move: i32,
-    pub initial_snake_position: Vec<(IVec2, IVec2)>,
+    pub initial_snake_position: Vec<SnakeElement>,
 }
 
 #[derive(Component)]
@@ -69,7 +69,7 @@ impl Lens<PartGrowAnim> for GrowPartLens {
 
 pub struct MovementPluggin;
 
-pub struct MoveCommandEvent(pub IVec2);
+pub struct MoveCommandEvent(pub IVec3);
 
 pub struct SnakeMovedEvent;
 
@@ -165,13 +165,13 @@ pub fn keyboard_move_command_system(
     mut move_command_event: EventWriter<MoveCommandEvent>,
 ) {
     let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
-        Some(UP)
+        Some(IVec3::Y)
     } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
-        Some(LEFT)
+        Some(IVec3::NEG_X)
     } else if keyboard.any_just_pressed(MOVE_DOWN_KEYS) {
-        Some(DOWN)
+        Some(IVec3::NEG_Y)
     } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
-        Some(RIGHT)
+        Some(IVec3::X)
     } else {
         None
     };
@@ -223,14 +223,14 @@ pub fn snake_movement_control_system(
         false
     };
 
-    if *direction == IVec2::Y
+    if *direction == IVec3::Z
         && snake.is_standing()
         && !level_instance.is_food(new_position)
         && !is_goal
     {
         commands.entity(snake_entity).insert(GravityFall {
             velocity: constants.jump_velocity,
-            relative_y: 0.0,
+            relative_z: 0.0,
             grid_distance: 0,
         });
         return;
@@ -287,7 +287,7 @@ pub fn snake_movement_control_system(
 
     if let Some(other_snake_entity) = other_snake_entity {
         commands.entity(other_snake_entity).insert(PushedAnim {
-            direction: direction.as_vec2(),
+            direction: direction.as_vec3(),
             velocity: constants.move_velocity,
             lerp_time: 0.0,
         });
@@ -373,10 +373,10 @@ pub fn gravity_system(
         match gravity_fall {
             Some(mut gravity_fall) => {
                 gravity_fall.velocity -= constants.gravity * time.delta_seconds();
-                gravity_fall.relative_y += gravity_fall.velocity * time.delta_seconds();
+                gravity_fall.relative_z += gravity_fall.velocity * time.delta_seconds();
 
                 // While relative y is positive, we haven't moved fully into the cell.
-                if gravity_fall.relative_y >= 0.0 {
+                if gravity_fall.relative_z >= 0.0 {
                     continue;
                 }
 
@@ -397,7 +397,7 @@ pub fn gravity_system(
 
                 // keep falling..
                 if min_distance_to_ground(&level, &snake) > 1 {
-                    gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
+                    gravity_fall.relative_z = GRID_TO_WORLD_UNIT;
                     gravity_fall.grid_distance += 1;
 
                     snake.fall_one_unit();
@@ -425,7 +425,7 @@ pub fn gravity_system(
 
                     commands.entity(snake_entity).insert(GravityFall {
                         velocity: 0.0,
-                        relative_y: GRID_TO_WORLD_UNIT,
+                        relative_z: GRID_TO_WORLD_UNIT,
                         grid_distance: 1,
                     });
                 }
@@ -477,7 +477,6 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
-    eye_query: Query<(Entity, &Parent, &GlobalTransform), With<SnakeEye>>,
 ) {
     for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
         for &child in children {
@@ -492,18 +491,6 @@ pub fn snake_exit_level_anim_system(
                     > 1
                 {
                     event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
-                }
-
-                for (eye_entity, parent, transform) in &eye_query {
-                    if parent.get() != entity {
-                        continue;
-                    }
-                    let offset = transform.translation().truncate() - to_world(level.goal_position);
-                    let distance = offset.dot(snake.parts()[part.part_index].1.as_vec2());
-
-                    if distance > 0.0 {
-                        commands.entity(eye_entity).despawn();
-                    }
                 }
             } else if snake.parts()[part.part_index].0 == level.goal_position {
                 commands.entity(entity).insert(PartClipper {

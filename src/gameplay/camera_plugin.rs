@@ -53,7 +53,7 @@ fn camera_setup_system(
                 50.0,
             ),
             projection: OrthographicProjection {
-                scale: 0.72,
+                scale: 0.02,
                 ..default()
             },
             ..default()
@@ -69,8 +69,8 @@ fn camera_zoom_scroll_system(
         return;
     };
 
-    const SCALE_MAX: f32 = 1.3;
-    const SCALE_MIN: f32 = 0.5;
+    const SCALE_MAX: f32 = 100.0;
+    const SCALE_MIN: f32 = 0.1;
 
     for event in scroll_event.iter() {
         match event.unit {
@@ -100,17 +100,18 @@ fn camera_pan_system(
         return;
     };
 
-    let pos_max = to_world(IVec2::new(
+    let pos_max = to_world(IVec3::new(
         level_template.grid.width() as i32,
         level_template.grid.height() as i32,
+        0,
     ));
 
     for event in motion_event.iter() {
         let mut new_pos = (camera_transform.translation()
             - 0.5 * Vec3::new(event.delta.x, -event.delta.y, 0.0))
-        .xy();
+        .xyz();
 
-        new_pos = new_pos.clamp(Vec2::ZERO, pos_max);
+        new_pos = new_pos.clamp(Vec3::ZERO, pos_max);
         let new_pos = new_pos.extend(camera_transform.translation().z);
         *camera_transform.translation_mut() = new_pos.into();
     }

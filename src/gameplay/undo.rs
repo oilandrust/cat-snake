@@ -8,10 +8,12 @@ use crate::{
     level::level_template::SnakeTemplate,
 };
 
+use super::snake_pluggin::SnakeElement;
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityUpdateEvent {
-    ClearPosition(IVec2, LevelEntityType),
-    FillPosition(IVec2),
+    ClearPosition(IVec3, LevelEntityType),
+    FillPosition(IVec3),
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -35,10 +37,10 @@ pub enum MoveHistoryEvent {
     PlayerSnakeMove,
 
     /// History event for the snake moving one tile in a direction, storing the old tails for undo.
-    SnakeMoveForward((IVec2, IVec2)),
+    SnakeMoveForward(SnakeElement),
 
     /// History event for moving a snake with an offset fex: pushing.
-    PassiveSnakeMove(IVec2),
+    PassiveSnakeMove(IVec3),
 
     /// History event marking that a snake starts falling.
     BeginFall(BeginFall),
@@ -47,7 +49,7 @@ pub enum MoveHistoryEvent {
     Grow,
 
     /// History event when a snake eats a food and the food is despawned.
-    Eat(IVec2),
+    Eat(IVec3),
 
     /// History event for a snake exiting the level through the goal.
     ExitLevel(Entity),

@@ -1,20 +1,6 @@
-Minimum to ship:
-    Test all levels
 
-    * cut soundtrack for faster loading
+Port to 3D:
+    * 3D camera
+    * 3D geometry: Cubes
+    * Cube for snake
 
-    Bugs:
-    * Despawn warning exit level
-
-Bonus
-    Bugs:
-    * Snake on snake
-    
-    Sound
-
-    Graphics:
-    * Snake round corners
-    * Snake eye and anim
-
-    Menu:
-    * Options

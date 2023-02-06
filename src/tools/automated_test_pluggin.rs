@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Clone)]
-struct TestInputCommand(IVec2);
+struct TestInputCommand(IVec3);
 
 #[derive(Resource, Clone)]
 struct TestCase {
@@ -92,9 +92,7 @@ fn start_test_case(
 
 fn init_automation(mut commands: Commands) {
     let test_cases = test_cases! {
-        test_case!(FALL_ON_SNAKE_BUG, RIGHT,),
-        test_case!(BUG_EXIT_LEVEL_ON_FALL, RIGHT,),
-        test_case!(FALL_ON_SPIKE, RIGHT, RIGHT,),
+        test_case!(TEST_0, RIGHT,),
     };
 
     commands.insert_resource(test_cases);

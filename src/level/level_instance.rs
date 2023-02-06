@@ -14,7 +14,7 @@ pub enum LevelEntityType {
 
 #[derive(Resource)]
 pub struct LevelInstance {
-    occupied_cells: HashMap<IVec2, LevelEntityType>,
+    occupied_cells: HashMap<IVec3, LevelEntityType>,
 }
 
 impl LevelInstance {
@@ -24,41 +24,41 @@ impl LevelInstance {
         }
     }
 
-    pub fn occupied_cells(&self) -> &HashMap<IVec2, LevelEntityType> {
+    pub fn occupied_cells(&self) -> &HashMap<IVec3, LevelEntityType> {
         &self.occupied_cells
     }
 
-    pub fn is_empty(&self, position: IVec2) -> bool {
+    pub fn is_empty(&self, position: IVec3) -> bool {
         !self.occupied_cells.contains_key(&position)
     }
 
-    pub fn is_empty_or_spike(&self, position: IVec2) -> bool {
+    pub fn is_empty_or_spike(&self, position: IVec3) -> bool {
         !self.occupied_cells.contains_key(&position) || self.is_spike(position)
     }
 
-    pub fn set_empty(&mut self, position: IVec2) -> Option<LevelEntityType> {
+    pub fn set_empty(&mut self, position: IVec3) -> Option<LevelEntityType> {
         self.occupied_cells.remove(&position)
     }
 
-    pub fn mark_position_occupied(&mut self, position: IVec2, value: LevelEntityType) {
+    pub fn mark_position_occupied(&mut self, position: IVec3, value: LevelEntityType) {
         self.occupied_cells.insert(position, value);
     }
 
-    pub fn is_food(&self, position: IVec2) -> bool {
+    pub fn is_food(&self, position: IVec3) -> bool {
         matches!(
             self.occupied_cells.get(&position),
             Some(LevelEntityType::Food)
         )
     }
 
-    pub fn is_spike(&self, position: IVec2) -> bool {
+    pub fn is_spike(&self, position: IVec3) -> bool {
         matches!(
             self.occupied_cells.get(&position),
             Some(LevelEntityType::Spike)
         )
     }
 
-    pub fn is_snake(&self, position: IVec2) -> Option<i32> {
+    pub fn is_snake(&self, position: IVec3) -> Option<i32> {
         let walkable = self.occupied_cells.get(&position);
         match walkable {
             Some(LevelEntityType::Snake(index)) => Some(*index),
@@ -72,7 +72,7 @@ impl LevelInstance {
     pub fn move_snake_forward(
         &mut self,
         snake: &Snake,
-        direction: IVec2,
+        direction: IVec3,
     ) -> Vec<LevelEntityUpdateEvent> {
         let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(2);
         let new_position = snake.head_position() + direction;
@@ -92,7 +92,7 @@ impl LevelInstance {
     /// Move a snake by an offset:
     /// Set the old locations are empty and mark the new locations as occupied.
     /// Returns a list of updates to the walkable cells that can be undone.
-    pub fn move_snake(&mut self, snake: &Snake, offset: IVec2) -> Vec<LevelEntityUpdateEvent> {
+    pub fn move_snake(&mut self, snake: &Snake, offset: IVec3) -> Vec<LevelEntityUpdateEvent> {
         let mut updates: VecDeque<LevelEntityUpdateEvent> =
             VecDeque::with_capacity(2 * snake.len());
 
@@ -109,7 +109,7 @@ impl LevelInstance {
         updates.into()
     }
 
-    pub fn eat_food(&mut self, position: IVec2) -> Vec<LevelEntityUpdateEvent> {
+    pub fn eat_food(&mut self, position: IVec3) -> Vec<LevelEntityUpdateEvent> {
         let old_value = self.set_empty(position).unwrap();
         vec![LevelEntityUpdateEvent::ClearPosition(position, old_value)]
     }
@@ -153,14 +153,14 @@ impl LevelInstance {
         }
     }
 
-    pub fn can_push_snake(&self, snake: &Snake, direction: IVec2) -> bool {
+    pub fn can_push_snake(&self, snake: &Snake, direction: IVec3) -> bool {
         snake.parts().iter().all(|(position, _)| {
             self.is_empty(*position + direction)
                 || self.is_snake_with_index(*position + direction, snake.index())
         })
     }
 
-    pub fn is_snake_with_index(&self, position: IVec2, snake_index: i32) -> bool {
+    pub fn is_snake_with_index(&self, position: IVec3, snake_index: i32) -> bool {
         let walkable = self.occupied_cells.get(&position);
         match walkable {
             Some(LevelEntityType::Snake(index)) => *index == snake_index,
@@ -168,7 +168,7 @@ impl LevelInstance {
         }
     }
 
-    pub fn is_wall_or_spike(&self, position: IVec2) -> bool {
+    pub fn is_wall_or_spike(&self, position: IVec3) -> bool {
         matches!(
             self.occupied_cells.get(&position),
             Some(LevelEntityType::Wall)
@@ -178,16 +178,17 @@ impl LevelInstance {
         )
     }
 
-    pub fn get_distance_to_ground(&self, position: IVec2, snake_index: i32) -> i32 {
+    pub fn get_distance_to_ground(&self, position: IVec3, snake_index: i32) -> i32 {
         let mut distance = 1;
+        return 1;
 
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
-        let mut current_position = position + IVec2::NEG_Y;
+        let mut current_position = position + IVec3::NEG_Z;
         while self.is_empty_or_spike(current_position)
             || self.is_snake_with_index(current_position, snake_index)
         {
-            current_position += IVec2::NEG_Y;
+            current_position += IVec3::NEG_Z;
             distance += 1;
 
             // There is no ground below.
