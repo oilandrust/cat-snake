@@ -20,7 +20,9 @@ use crate::{
 
 use super::{
     level_pluggin::Goal,
-    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeElement, SnakePart, SnakePartBundle},
+    snake_pluggin::{
+        DespawnSnakePartEvent, MaterialMeshBuilder, PartClipper, SnakeElement, SnakePart,
+    },
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -165,11 +167,11 @@ pub fn keyboard_move_command_system(
     mut move_command_event: EventWriter<MoveCommandEvent>,
 ) {
     let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
-        Some(IVec3::Y)
+        Some(IVec3::NEG_Z)
     } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
         Some(IVec3::NEG_X)
     } else if keyboard.any_just_pressed(MOVE_DOWN_KEYS) {
-        Some(IVec3::NEG_Y)
+        Some(IVec3::Z)
     } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
         Some(IVec3::X)
     } else {
@@ -223,7 +225,7 @@ pub fn snake_movement_control_system(
         false
     };
 
-    if *direction == IVec3::Z
+    if *direction == IVec3::Y
         && snake.is_standing()
         && !level_instance.is_food(new_position)
         && !is_goal
@@ -301,6 +303,8 @@ pub fn snake_movement_control_system(
 
 pub fn grow_snake_on_move_system(
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
+    mut meshes: ResMut<bevy::asset::Assets<Mesh>>,
+    mut materials: ResMut<bevy::asset::Assets<StandardMaterial>>,
     mut commands: Commands,
     snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
     foods_query: Query<(Entity, &Food), With<Food>>,
@@ -326,9 +330,18 @@ pub fn grow_snake_on_move_system(
             GrowPartLens,
         );
 
+        let mut part_builder = MaterialMeshBuilder {
+            meshes: meshes.as_mut(),
+            materials: materials.as_mut(),
+        };
+
         commands.entity(snake_entity).with_children(|parent| {
             parent
-                .spawn(SnakePartBundle::new(snake.index(), snake.len() - 1))
+                .spawn(part_builder.build_part(
+                    snake.tail_position(),
+                    snake.index(),
+                    snake.len() - 1,
+                ))
                 .insert((Animator::new(grow_tween), PartGrowAnim { grow_factor: 0.0 }));
         });
     }
@@ -397,7 +410,7 @@ pub fn gravity_system(
 
                 // keep falling..
                 if min_distance_to_ground(&level, &snake) > 1 {
-                    gravity_fall.relative_z = GRID_TO_WORLD_UNIT;
+                    gravity_fall.relative_z = 1.0;
                     gravity_fall.grid_distance += 1;
 
                     snake.fall_one_unit();
@@ -425,7 +438,7 @@ pub fn gravity_system(
 
                     commands.entity(snake_entity).insert(GravityFall {
                         velocity: 0.0,
-                        relative_z: GRID_TO_WORLD_UNIT,
+                        relative_z: 1.0,
                         grid_distance: 1,
                     });
                 }
@@ -440,8 +453,7 @@ fn snake_smooth_movement_system(
     mut query: Query<(Entity, &mut MoveCommand)>,
 ) {
     for (entity, mut move_command) in query.iter_mut() {
-        move_command.lerp_time +=
-            move_command.velocity * GRID_TO_WORLD_UNIT_INVERSE * time.delta_seconds();
+        move_command.lerp_time += move_command.velocity * time.delta_seconds();
         if move_command.lerp_time > 1.0 {
             commands.entity(entity).remove::<MoveCommand>();
         }
@@ -454,8 +466,7 @@ pub fn snake_push_anim_system(
     mut push_anim_query: Query<(Entity, &mut PushedAnim)>,
 ) {
     for (entity, mut move_command) in push_anim_query.iter_mut() {
-        move_command.lerp_time +=
-            move_command.velocity * GRID_TO_WORLD_UNIT_INVERSE * time.delta_seconds();
+        move_command.lerp_time += move_command.velocity * time.delta_seconds();
         if move_command.lerp_time > 1.0 {
             commands.entity(entity).remove::<PushedAnim>();
         }

@@ -1,15 +1,12 @@
 use std::f32::consts::PI;
 
 use bevy::{app::AppExit, prelude::*};
-use bevy_prototype_lyon::{
-    prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
-    shapes,
-};
+use bevy_prototype_lyon::prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
+    gameplay::game_constants_pluggin::to_world,
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
@@ -21,8 +18,9 @@ use crate::{
 };
 
 use super::{
-    game_constants_pluggin::{GameConstants, FOOD_COLOR, SPIKE_COLOR},
+    game_constants_pluggin::{FOOD_COLOR, SPIKE_COLOR},
     movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
+    snake_pluggin::MaterialMeshBuilder,
 };
 
 pub struct StartLevelEventWithIndex(pub usize);
@@ -178,12 +176,30 @@ fn spawn_level_entities_system(
     mut commands: Commands,
     mut event_start_level: EventReader<StartLevelEventWithLevel>,
     level_template: Res<LevelTemplate>,
-    game_constants: Res<GameConstants>,
     mut level_instance: ResMut<LevelInstance>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
     }
+
+    // light
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 15000.0,
+            ..default()
+        },
+        transform: Transform::from_translation(Vec3::ONE).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 25.0 })),
+        material: materials.add(Color::BEIGE.into()),
+        ..default()
+    });
 
     // Spawn the ground sprites
     for (position, cell) in level_template.grid.iter::<IVec2>() {
@@ -191,27 +207,35 @@ fn spawn_level_entities_system(
             continue;
         }
 
-        commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: game_constants.ground_color,
-                    custom_size: Some(GRID_CELL_SIZE),
-                    ..default()
-                },
-                transform: Transform {
-                    translation: to_world(position.extend(0)),
-                    ..default()
-                },
+        commands.spawn((
+            PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+                material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                transform: Transform::from_translation(to_world(IVec3::new(
+                    position.x, 0, position.y,
+                ))),
                 ..default()
-            })
-            .insert(LevelEntity);
+            },
+            LevelEntity,
+        ));
 
-        level_instance.mark_position_occupied(position.extend(0), LevelEntityType::Wall);
+        level_instance
+            .mark_position_occupied(IVec3::new(position.x, 0, position.y), LevelEntityType::Wall);
     }
+
+    let mut mesh_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
 
     // Spawn the food sprites.
     for position in &level_template.food_positions {
-        spawn_food(&mut commands, position, &mut level_instance);
+        spawn_food(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+        );
     }
 
     // Spawn the spikes sprites.
@@ -227,7 +251,7 @@ fn spawn_level_entities_system(
             let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
             let position = Vec2::new(angle.cos(), angle.sin());
             let offset = 0.8 + (i % 2) as f32;
-            let radius = 0.5 * GRID_TO_WORLD_UNIT * offset;
+            let radius = 0.5 * offset;
             path_builder.line_to(radius * position);
         }
         path_builder.close();
@@ -258,7 +282,7 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &m
         let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
         let position = Vec2::new(angle.cos(), angle.sin());
         let offset = 0.5 + (i % 2) as f32;
-        let radius = 0.3 * GRID_TO_WORLD_UNIT * offset;
+        let radius = 0.3 * offset;
         path_builder.line_to(radius * position);
     }
     path_builder.close();
@@ -280,25 +304,34 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &m
     level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
 }
 
-pub fn spawn_food(commands: &mut Commands, position: &IVec3, level_instance: &mut LevelInstance) {
-    let shape = shapes::Circle {
-        radius: 0.8 * GRID_TO_WORLD_UNIT / 2.0,
-        ..Default::default()
-    };
+impl<'a> MaterialMeshBuilder<'a> {
+    pub fn build_food_mesh(&mut self, position: IVec3) -> PbrBundle {
+        PbrBundle {
+            mesh: self.meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.3,
+                subdivisions: 5,
+            })),
+            material: self.materials.add(FOOD_COLOR.into()),
+            transform: Transform::from_translation(to_world(IVec3::new(position.x, 0, position.y))),
+            ..default()
+        }
+    }
+}
 
-    commands
-        .spawn(GeometryBuilder::build_as(
-            &shape,
-            DrawMode::Fill(FillMode::color(FOOD_COLOR)),
-            Transform {
-                translation: to_world(*position),
-                ..default()
-            },
-        ))
-        .insert(Food(*position))
-        .insert(LevelEntity);
+pub fn spawn_food(
+    mesh_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    position: &IVec3,
+    level_instance: &mut LevelInstance,
+) {
+    commands.spawn((
+        mesh_builder.build_food_mesh(*position),
+        Food(IVec3::new(position.x, 0, position.y)),
+        LevelEntity,
+    ));
 
-    level_instance.mark_position_occupied(*position, LevelEntityType::Food);
+    level_instance
+        .mark_position_occupied(IVec3::new(position.x, 0, position.y), LevelEntityType::Food);
 }
 
 pub fn clear_level_system(

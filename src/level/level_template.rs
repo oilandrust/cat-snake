@@ -98,7 +98,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
 
     let parts: Vec<IVec3> = parts
         .into_iter()
-        .map(|position| position.extend(0))
+        .map(|position| IVec3::new(position.x, 0, position.y))
         .collect();
 
     if parts.len() < 2 {
@@ -119,7 +119,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
 
 impl LevelTemplate {
     pub fn parse(level_string: &str) -> Result<LevelTemplate> {
-        let mut grid = level_string.parse::<Grid<Cell>>()?.flip_y();
+        let mut grid = level_string.parse::<Grid<Cell>>()?;
 
         // Find and extract the snakes.
         let mut start_heads: Vec<(usize, Cell, char)> = grid
@@ -159,32 +159,33 @@ impl LevelTemplate {
             .position(|&cell| cell == Cell::Goal)
             .ok_or(ParseLevelError::MissingLevelGoal)?;
 
-        let goal_position = grid.position_for_index::<IVec2>(goal_index).extend(0);
+        let goal_position = grid.position_for_index::<IVec2>(goal_index);
+        let goal_position = IVec3::new(goal_position.x, 0, goal_position.y);
 
-        grid.set_cell(goal_position.xy(), Cell::Empty);
+        grid.set_cell(goal_position.xz(), Cell::Empty);
 
         // Find the food positons.
         let food_positions: Vec<IVec3> = grid
             .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Food)
-            .map(|(position, _)| position.extend(0))
+            .map(|(position, _)| IVec3::new(position.x, 0, position.y))
             .collect();
 
         // And set empty.
         for position in &food_positions {
-            grid.set_cell(position.xy(), Cell::Empty);
+            grid.set_cell(position.xz(), Cell::Empty);
         }
 
         // Find the spikes positons.
         let spike_positions: Vec<IVec3> = grid
             .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Spike)
-            .map(|(position, _)| position.extend(0))
+            .map(|(position, _)| IVec3::new(position.x, 0, position.y))
             .collect();
 
         // And set empty.
         for position in &spike_positions {
-            grid.set_cell(position.xy(), Cell::Empty);
+            grid.set_cell(position.xz(), Cell::Empty);
         }
 
         Ok(LevelTemplate {

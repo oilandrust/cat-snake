@@ -1,6 +1,6 @@
 use args::Args;
 use bevy::prelude::*;
-use bevy_kira_audio::{Audio, AudioControl, AudioPlugin, AudioSource};
+use bevy_kira_audio::{AudioPlugin, AudioSource};
 use bevy_tweening::TweeningPlugin;
 use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_pluggin::*;
@@ -143,14 +143,10 @@ pub struct Assets {
     pub move_effect_2: Handle<AudioSource>,
 }
 
-fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>, audio: Res<Audio>) {
-    let background_noise: Handle<AudioSource> = asset_server.load("beach.mp3");
-
+fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(Assets {
-        background_noise: background_noise.clone(),
+        background_noise: asset_server.load("beach.mp3"),
         move_effect_1: asset_server.load("effects1.mp3"),
         move_effect_2: asset_server.load("effects2.mp3"),
     });
-
-    audio.play(background_noise).looped().with_volume(0.1);
 }

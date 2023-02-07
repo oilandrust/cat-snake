@@ -1,11 +1,7 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 
-pub const GRID_TO_WORLD_UNIT: f32 = 1.;
-pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
-pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
-pub const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
-pub const MOVE_START_VELOCITY: f32 = 180.0;
+pub const MOVE_START_VELOCITY: f32 = 5.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
 pub const GRAVITY: f32 = 300.0;
 

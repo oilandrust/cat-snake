@@ -1,14 +1,11 @@
 use bevy::{prelude::*, transform::TransformSystem};
-use bevy_prototype_lyon::{
-    entity::ShapeBundle,
-    prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
-};
+use bevy_prototype_lyon::prelude::ShapePlugin;
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
-use std::{collections::VecDeque, mem};
+use std::collections::VecDeque;
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS},
+    gameplay::game_constants_pluggin::{to_grid, to_world, SNAKE_COLORS},
     gameplay::level_pluggin::LevelEntity,
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
@@ -16,8 +13,6 @@ use crate::{
     level::level_template::{LevelTemplate, SnakeTemplate},
     GameState,
 };
-
-use super::movement_pluggin::PartGrowAnim;
 
 pub struct SnakePluggin;
 
@@ -40,13 +35,6 @@ impl Plugin for SnakePluggin {
                 update_snake_transforms_system
                     .run_in_state(GameState::Game)
                     .label("SnakeTransform")
-                    .before(TransformSystem::TransformPropagate),
-            )
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                update_snake_parts_mesh_system
-                    .run_in_state(GameState::Game)
-                    .after("SnakeTransform")
                     .before(TransformSystem::TransformPropagate),
             )
             .add_system_to_stage(
@@ -91,16 +79,28 @@ pub struct SnakePart {
 pub struct SnakePartBundle {
     pub part: SnakePart,
     pub level_entity: LevelEntity,
-    pub shape: ShapeBundle,
+    pub shape: PbrBundle,
 }
 
-impl SnakePartBundle {
-    pub fn new(snake_index: i32, part_index: usize) -> Self {
+pub struct MaterialMeshBuilder<'a> {
+    pub meshes: &'a mut Assets<Mesh>,
+    pub materials: &'a mut Assets<StandardMaterial>,
+}
+
+impl<'a> MaterialMeshBuilder<'a> {
+    pub fn build_part(
+        &mut self,
+        position: IVec3,
+        snake_index: i32,
+        part_index: usize,
+    ) -> SnakePartBundle {
         let color = SNAKE_COLORS[snake_index as usize][part_index % 2];
 
         SnakePartBundle {
-            shape: ShapeBundle {
-                mode: DrawMode::Fill(FillMode::color(color)),
+            shape: PbrBundle {
+                mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.7 })),
+                material: self.materials.add(color.into()),
+                global_transform: GlobalTransform::from_translation(to_world(position)),
                 ..default()
             },
             part: SnakePart {
@@ -130,6 +130,10 @@ pub struct SpawnSnakeEvent;
 impl Snake {
     pub fn parts(&self) -> &VecDeque<SnakeElement> {
         &self.parts
+    }
+
+    pub fn get_part(&self, part_index: usize) -> &SnakeElement {
+        &self.parts[part_index]
     }
 
     pub fn index(&self) -> i32 {
@@ -204,6 +208,7 @@ impl Snake {
 }
 
 pub fn spawn_snake(
+    part_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     level_instance: &mut LevelInstance,
     snake_template: &SnakeTemplate,
@@ -220,8 +225,8 @@ pub fn spawn_snake(
     ));
 
     spawn_command.with_children(|parent| {
-        for (index, _) in snake_template.iter().enumerate() {
-            parent.spawn(SnakePartBundle::new(snake_index, index));
+        for (index, part) in snake_template.iter().enumerate() {
+            parent.spawn(part_builder.build_part(part.0, snake_index, index));
         }
     });
 
@@ -232,230 +237,70 @@ pub fn spawn_snake(
     spawn_command.id()
 }
 
-const FOWARD_LEFT: IVec2 = IVec2::new(1, 1);
-const FOWARD_RIGHT: IVec2 = IVec2::new(1, -1);
-const BACK_RIGHT: IVec2 = IVec2::new(-1, -1);
-const BACK_LEFT: IVec2 = IVec2::new(-1, 1);
-
-const CORNERS: [IVec2; 4] = [FOWARD_LEFT, FOWARD_RIGHT, BACK_RIGHT, BACK_LEFT];
-
 #[allow(clippy::type_complexity)]
 pub fn update_snake_transforms_system(
     mut snake_query: Query<
         (
             &Snake,
             &mut Transform,
+            &Children,
             Option<&MoveCommand>,
             Option<&PushedAnim>,
             Option<&GravityFall>,
         ),
-        With<Active>,
+        (With<Active>, Without<SnakePart>),
     >,
+    mut part_query: Query<(&mut Transform, &SnakePart), With<SnakePart>>,
 ) {
-    for (snake, mut transform, move_command, pushed_anim, fall) in &mut snake_query {
+    for (snake, mut transform, _, _, pushed_anim, fall) in &mut snake_query {
         let fall_offset = fall.map_or(Vec3::ZERO, |gravity_fall| gravity_fall.relative_z * Vec3::Y);
 
         let push_offset = pushed_anim.map_or(Vec3::ZERO, |command| {
-            let initial_offset = -GRID_TO_WORLD_UNIT * command.direction;
+            let initial_offset = -command.direction;
             initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
-        let anim_direction = snake.head_direction().as_vec3();
-        let move_offset = move_command.map_or(Vec3::ZERO, |command| {
-            let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
-        });
+        transform.translation = to_world(snake.head_position()) + fall_offset + push_offset;
 
-        transform.translation =
-            to_world(snake.head_position()) + fall_offset + push_offset + move_offset;
-
-        let direction_3 = snake.head_direction().as_vec3();
-        let ortho_dir = Vec3::Z.cross(direction_3);
-
-        transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Z));
+        //transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Y));
     }
-}
 
-#[allow(clippy::type_complexity)]
-fn update_snake_parts_mesh_system(
-    mut snake_parts_query: Query<(
-        &mut Path,
-        &SnakePart,
-        Option<&PartClipper>,
-        Option<&PartGrowAnim>,
-        &Parent,
-    )>,
-    snake_query: Query<(&Snake, &Transform, Option<&MoveCommand>), With<Active>>,
-) {
-    for (mut path, part, clipper, part_grow, parent) in snake_parts_query.iter_mut() {
-        let Ok((snake, transform, move_command)) = snake_query.get(parent.get()) else {
-            continue;
-        };
+    for (snake, _, children, move_command, _, _) in &mut snake_query {
+        for child in children {
+            let (mut part_transform, part) = part_query.get_mut(*child).unwrap();
+            let element = snake.get_part(part.part_index);
 
-        if part.part_index > snake.len() - 1 {
-            continue;
-        }
-
-        let mut path_builder = PathBuilder::new();
-
-        let next_part = snake.parts.get(part.part_index + 1);
-        let prev_part = if part.part_index > 0 {
-            snake.parts.get(part.part_index - 1)
-        } else {
-            None
-        };
-
-        let mut part_vertices: Vec<Vec2> = Vec::with_capacity(5);
-
-        let (position, direction) = snake.parts[part.part_index];
-        let position = position - snake.head_position();
-
-        let position = position.truncate();
-        let direction = direction.truncate();
-
-        let ortho_dir = IVec2::new(-direction.y, direction.x);
-
-        part_vertices.clear();
-
-        for corner in CORNERS {
-            let mut corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
-                + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
-                + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2();
-
-            if let Some(part_grow) = part_grow {
-                if corner.x < 0 {
-                    corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
-                        + (0.5 - part_grow.grow_factor) * GRID_TO_WORLD_UNIT * direction.as_vec2()
-                        + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2();
-                }
-            }
-
-            let mut anim_offset = Vec2::ZERO;
-            if let Some(command) = move_command {
-                let anim_direction = direction.as_vec2();
-                let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-                anim_offset = initial_offset.lerp(Vec2::ZERO, command.lerp_time);
-
-                if let Some((_, next_direction)) = next_part {
-                    let next_direction = next_direction.truncate();
-                    let next_dir_relative =
-                        IVec2::new(next_direction.dot(direction), next_direction.dot(ortho_dir));
-
-                    if direction != next_direction && corner.x < 0 {
-                        if corner.dot(next_dir_relative) > 0 {
-                            if command.lerp_time < 0.5 {
-                                let mut extra_vertex_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-                                anim_offset = -GRID_TO_WORLD_UNIT * anim_direction
-                                    - GRID_TO_WORLD_UNIT
-                                        * (1.0 - 2.0 * command.lerp_time)
-                                        * next_direction.as_vec2();
-
-                                if next_dir_relative.y > 0 {
-                                    mem::swap(&mut extra_vertex_offset, &mut anim_offset);
-                                }
-
-                                part_vertices.push(corner_world_position + extra_vertex_offset);
-                            } else {
-                                anim_offset = -direction.as_vec2()
-                                    * GRID_TO_WORLD_UNIT
-                                    * (1.0 - 2.0 * (command.lerp_time - 0.5));
-                            }
-                        } else {
-                            anim_offset = Vec2::ZERO;
-                        }
-                    }
-                }
-
-                if let Some((_, prev_direction)) = prev_part {
-                    let prev_direction = prev_direction.truncate();
-                    let prev_dir_relative =
-                        IVec2::new(prev_direction.dot(direction), prev_direction.dot(ortho_dir));
-
-                    if direction != prev_direction && corner.x > 0 {
-                        if corner.dot(prev_dir_relative) < 0 {
-                            if command.lerp_time < 0.5 {
-                                anim_offset = direction.as_vec2()
-                                    * GRID_TO_WORLD_UNIT
-                                    * (2.0 * command.lerp_time - 1.0);
-                            } else {
-                                let mut extra_vertex_offset = Vec2::ZERO;
-                                anim_offset = GRID_TO_WORLD_UNIT
-                                    * (2.0 * (command.lerp_time - 0.5))
-                                    * prev_direction.as_vec2();
-
-                                if prev_dir_relative.y > 0 {
-                                    mem::swap(&mut extra_vertex_offset, &mut anim_offset);
-                                }
-
-                                part_vertices.push(corner_world_position + extra_vertex_offset);
-                            }
-                        } else {
-                            anim_offset = -direction.as_vec2() * GRID_TO_WORLD_UNIT;
-                        }
-                    }
-                }
-            }
-
-            part_vertices.push(corner_world_position + anim_offset);
-        }
-
-        // We compensate for the move offset that is allready added to the snake transform.
-        let anim_direction = snake.head_direction();
-        let move_offset = move_command.map_or(Vec3::ZERO, |command| {
-            let initial_offset = -anim_direction.as_vec3();
-            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
-        });
-
-        // Anim offset.
-        part_vertices.iter_mut().for_each(|vertex| {
-            *vertex -= move_offset.truncate();
-        });
-
-        // Clip in world space for end of level anim.
-        if let Some(modifier) = clipper {
-            let world_clip_position = to_world(modifier.clip_position);
-            part_vertices.iter_mut().for_each(|vertex| {
-                let offset = (*vertex + transform.translation.truncate()
-                    - world_clip_position.truncate())
-                .dot(direction.as_vec2());
-                if offset > 0.0 {
-                    *vertex -= offset * direction.as_vec2();
-                }
+            let move_offset = move_command.map_or(Vec3::ZERO, |command| {
+                let initial_offset = -element.1.as_vec3();
+                initial_offset.lerp(Vec3::ZERO, command.lerp_time)
             });
+
+            part_transform.translation =
+                (element.0 - snake.head_position()).as_vec3() + move_offset;
         }
-
-        // Apply inv snake rotation so that it's in right space after snake transform.
-        let snake_inv_rot = transform.rotation.inverse();
-        let rotate = |vertex: Vec2| (snake_inv_rot * vertex.extend(0.0)).truncate();
-
-        part_vertices.iter_mut().for_each(|vertex| {
-            *vertex = rotate(*vertex);
-        });
-
-        path_builder.move_to(*part_vertices.first().unwrap());
-        part_vertices.iter().skip(1).for_each(|vertex| {
-            path_builder.line_to(*vertex);
-        });
-
-        path_builder.close();
-
-        *path = path_builder.build();
     }
 }
 
-pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: Entity) {
+pub fn set_snake_active(
+    part_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    snake: &Snake,
+    snake_entity: Entity,
+) {
     commands
         .entity(snake_entity)
         .insert(Active)
         .with_children(|parent| {
-            for (index, _) in snake.parts().iter().enumerate() {
-                parent.spawn(SnakePartBundle::new(snake.index(), index));
+            for (index, part) in snake.parts().iter().enumerate() {
+                parent.spawn(part_builder.build_part(part.0, snake.index(), index));
             }
         });
 }
 
 pub fn spawn_snake_system(
     level: Res<LevelTemplate>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut level_instance: ResMut<LevelInstance>,
     mut commands: Commands,
     mut event_spawn_snake: EventReader<SpawnSnakeEvent>,
@@ -464,8 +309,14 @@ pub fn spawn_snake_system(
         return;
     }
 
+    let mut part_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
+
     for (snake_index, snake_template) in level.initial_snakes.iter().enumerate() {
         let entity = spawn_snake(
+            &mut part_builder,
             &mut commands,
             &mut level_instance,
             snake_template,

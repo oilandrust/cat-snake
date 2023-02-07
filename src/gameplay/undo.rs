@@ -8,7 +8,7 @@ use crate::{
     level::level_template::SnakeTemplate,
 };
 
-use super::snake_pluggin::SnakeElement;
+use super::snake_pluggin::{MaterialMeshBuilder, SnakeElement};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityUpdateEvent {
@@ -97,6 +97,7 @@ impl SnakeHistory {
         snakes: &mut [Mut<Snake>],
         level: &mut LevelInstance,
         commands: &mut Commands,
+        part_builder: &mut MaterialMeshBuilder,
         despawn_snake_part_event: &mut EventWriter<DespawnSnakePartEvent>,
     ) {
         let mut snakes: Vec<&mut Snake> = snakes.iter_mut().map(|snake| snake.as_mut()).collect();
@@ -137,10 +138,10 @@ impl SnakeHistory {
                     snake.shrink();
                 }
                 MoveHistoryEvent::Eat(position) => {
-                    spawn_food(commands, &position, level);
+                    spawn_food(part_builder, commands, &position, level);
                 }
                 MoveHistoryEvent::ExitLevel(snake_entity) => {
-                    set_snake_active(commands, snake, snake_entity);
+                    set_snake_active(part_builder, commands, snake, snake_entity);
                 }
             }
 
@@ -165,8 +166,11 @@ pub fn keyboard_undo_system(
     trigger_undo_event.send(UndoEvent);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn undo_event_system(
     mut trigger_undo_event: EventReader<UndoEvent>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut snake_history: ResMut<SnakeHistory>,
     mut level: ResMut<LevelInstance>,
     mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
@@ -183,10 +187,16 @@ pub fn undo_event_system(
 
     let mut snakes: Vec<Mut<Snake>> = query.iter_mut().collect();
 
+    let mut part_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
+
     snake_history.undo_last(
         &mut snakes,
         &mut level,
         &mut commands,
+        &mut part_builder,
         &mut despawn_snake_part_event,
     );
 }

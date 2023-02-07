@@ -10,10 +10,7 @@ use crate::{
     GameState,
 };
 
-use super::{
-    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
-    level_pluggin::{LevelEntity, StartLevelEventWithLevel},
-};
+use super::level_pluggin::{LevelEntity, StartLevelEventWithLevel};
 
 pub struct CameraPlugin;
 
@@ -45,42 +42,39 @@ fn camera_setup_system(
         return;
     }
 
-    commands
-        .spawn(Camera2dBundle {
-            transform: Transform::from_xyz(
-                level_template.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                level_template.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                50.0,
-            ),
-            projection: OrthographicProjection {
-                scale: 0.02,
-                ..default()
-            },
+    let level_center = Vec3::new(
+        level_template.grid.width() as f32 * 0.5,
+        0.0,
+        level_template.grid.height() as f32 * 0.5,
+    );
+
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_translation(level_center + 10.0 * Vec3::Y + 5.0 * Vec3::Z)
+                .looking_at(level_center, Vec3::Y),
             ..default()
-        })
-        .insert(LevelEntity);
+        },
+        LevelEntity,
+    ));
 }
 
 fn camera_zoom_scroll_system(
     mut scroll_event: EventReader<MouseWheel>,
-    mut camera: Query<&mut OrthographicProjection>,
+    mut camera: Query<&mut Transform, With<Camera>>,
 ) {
-    let Ok(mut projection) = camera.get_single_mut() else {
+    let Ok(mut camera_transform) = camera.get_single_mut() else {
         return;
     };
 
-    const SCALE_MAX: f32 = 100.0;
-    const SCALE_MIN: f32 = 0.1;
+    let forward = camera_transform.forward();
 
     for event in scroll_event.iter() {
         match event.unit {
             MouseScrollUnit::Line => {
-                projection.scale -= 0.05 * event.y;
-                projection.scale = projection.scale.clamp(SCALE_MIN, SCALE_MAX);
+                camera_transform.translation += 0.5 * event.y * forward;
             }
             MouseScrollUnit::Pixel => {
-                projection.scale -= 0.005 * event.y;
-                projection.scale = projection.scale.clamp(SCALE_MIN, SCALE_MAX);
+                camera_transform.translation += 0.05 * event.y * forward;
             }
         }
     }
@@ -90,7 +84,6 @@ fn camera_pan_system(
     mut motion_event: EventReader<MouseMotion>,
     buttons: Res<Input<MouseButton>>,
     mut camera: Query<&mut GlobalTransform, With<Camera>>,
-    level_template: Res<LevelTemplate>,
 ) {
     if !buttons.pressed(MouseButton::Right) {
         return;
@@ -100,18 +93,11 @@ fn camera_pan_system(
         return;
     };
 
-    let pos_max = to_world(IVec3::new(
-        level_template.grid.width() as i32,
-        level_template.grid.height() as i32,
-        0,
-    ));
-
     for event in motion_event.iter() {
-        let mut new_pos = (camera_transform.translation()
-            - 0.5 * Vec3::new(event.delta.x, -event.delta.y, 0.0))
+        let new_pos = (camera_transform.translation()
+            - 0.1 * Vec3::new(event.delta.x, 0.0, event.delta.y))
         .xyz();
 
-        new_pos = new_pos.clamp(Vec3::ZERO, pos_max);
         let new_pos = new_pos.extend(camera_transform.translation().z);
         *camera_transform.translation_mut() = new_pos.into();
     }
