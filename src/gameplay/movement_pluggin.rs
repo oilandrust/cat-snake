@@ -29,6 +29,8 @@ const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
 const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
 const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
+const RISE_KEYS: [KeyCode; 2] = [KeyCode::E, KeyCode::Space];
+const DIVE_KEYS: [KeyCode; 2] = [KeyCode::Q, KeyCode::LControl];
 
 #[derive(Component, Default)]
 pub struct MoveCommand {
@@ -174,9 +176,9 @@ pub fn keyboard_move_command_system(
         Some(IVec3::Z)
     } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
         Some(IVec3::X)
-    } else if keyboard.just_pressed(KeyCode::E) {
+    } else if keyboard.any_just_pressed(RISE_KEYS) {
         Some(IVec3::Y)
-    } else if keyboard.just_pressed(KeyCode::Q) {
+    } else if keyboard.any_just_pressed(DIVE_KEYS) {
         Some(IVec3::NEG_Y)
     } else {
         None
@@ -195,6 +197,27 @@ type WithMovementControlSystemFilter = (
     Without<MoveCommand>,
     Without<GravityFall>,
 );
+
+fn snake_can_move_forward(
+    level_instance: &LevelInstance,
+    snake: &Snake,
+    other_snake: &Option<Mut<Snake>>,
+    direction: IVec3,
+) -> bool {
+    let new_position = snake.head_position() + direction;
+
+    if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
+        return false;
+    }
+
+    if let Some(other_snake) = &other_snake {
+        if !level_instance.can_push_snake(other_snake.as_ref(), direction) {
+            return false;
+        }
+    };
+
+    true
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
@@ -220,47 +243,60 @@ pub fn snake_movement_control_system(
         return;
     };
 
-    let new_position = snake.head_position() + *direction;
+    // We try to move with the input direction, if not possible try to go up.
+    let directions = vec![*direction, IVec3::Y];
 
-    // Check that we have enough parts to go up.
-    let is_goal = if let Ok(goal) = goal_query.get_single() {
-        goal.0 == new_position
-    } else {
-        false
+    let move_forward_or_up = 'choose_direction: {
+        for direction in directions {
+            let new_position = snake.head_position() + direction;
+
+            // Check that we have enough parts to go up.
+            let is_goal = if let Ok(goal) = goal_query.get_single() {
+                goal.0 == new_position
+            } else {
+                false
+            };
+
+            if direction == IVec3::Y
+                && snake.is_standing()
+                && !level_instance.is_food(new_position)
+                && !is_goal
+            {
+                commands.entity(snake_entity).insert(GravityFall {
+                    velocity: constants.jump_velocity,
+                    relative_z: 0.0,
+                    grid_distance: 0,
+                });
+                break 'choose_direction None;
+            }
+
+            // Find if there is a snake in the way.
+            let (other_snake_entity, other_snake) = level_instance
+                .is_snake(new_position)
+                .and_then(|other_snake_id| {
+                    other_snakes_query
+                        .iter_mut()
+                        .find(|(_, snake)| snake.index() == other_snake_id)
+                })
+                .unzip();
+
+            // Check if we can move forward.
+            if snake_can_move_forward(&level_instance, &snake, &other_snake, direction) {
+                break 'choose_direction Some((
+                    direction,
+                    new_position,
+                    other_snake_entity,
+                    other_snake,
+                ));
+            }
+        }
+        None
     };
 
-    if *direction == IVec3::Y
-        && snake.is_standing()
-        && !level_instance.is_food(new_position)
-        && !is_goal
-    {
-        commands.entity(snake_entity).insert(GravityFall {
-            velocity: constants.jump_velocity,
-            relative_z: 0.0,
-            grid_distance: 0,
-        });
+    let Some((direction, new_position,
+        other_snake_entity,
+        mut other_snake)) = move_forward_or_up else {
         return;
-    }
-
-    // Check for collition with self and walls.
-    if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
-        return;
-    }
-
-    // Find if there is a snake in the way.
-    let (other_snake_entity, mut other_snake) = level_instance
-        .is_snake(new_position)
-        .and_then(|other_snake_id| {
-            other_snakes_query
-                .iter_mut()
-                .find(|(_, snake)| snake.index() == other_snake_id)
-        })
-        .unzip();
-
-    if let Some(other_snake) = &mut other_snake {
-        if !level_instance.can_push_snake(other_snake.as_ref(), *direction) {
-            return;
-        }
     };
 
     let other_snake = other_snake.as_mut().map(|some| some.as_mut());
@@ -272,7 +308,7 @@ pub fn snake_movement_control_system(
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
 
     snake_commands
-        .player_move(snake.as_mut(), *direction)
+        .player_move(snake.as_mut(), direction)
         .pushing_snake(other_snake)
         .eating_food(food)
         .execute();

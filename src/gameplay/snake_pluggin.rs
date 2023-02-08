@@ -95,10 +95,11 @@ impl<'a> MaterialMeshBuilder<'a> {
         part_index: usize,
     ) -> SnakePartBundle {
         let color = SNAKE_COLORS[snake_index as usize][part_index % 2];
+        let size = if part_index == 0 { 0.8 } else { 0.7 };
 
         SnakePartBundle {
             shape: PbrBundle {
-                mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.7 })),
+                mesh: self.meshes.add(Mesh::from(shape::Cube { size })),
                 material: self.materials.add(color.into()),
                 global_transform: GlobalTransform::from_translation(to_world(position)),
                 ..default()
@@ -182,7 +183,7 @@ impl Snake {
     }
 
     pub fn is_standing(&self) -> bool {
-        (self.parts.front().unwrap().0.z - self.parts.back().unwrap().0.z)
+        (self.parts.front().unwrap().0.y - self.parts.back().unwrap().0.y)
             == (self.len() - 1) as i32
     }
 
