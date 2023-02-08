@@ -137,16 +137,18 @@ pub fn run(app: &mut App, args: &Args) {
 }
 
 #[derive(Resource)]
-pub struct Assets {
+pub struct GameAssets {
     pub background_noise: Handle<AudioSource>,
     pub move_effect_1: Handle<AudioSource>,
     pub move_effect_2: Handle<AudioSource>,
+    pub outline_texture: Handle<Image>,
 }
 
 fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.insert_resource(Assets {
+    commands.insert_resource(GameAssets {
         background_noise: asset_server.load("beach.mp3"),
         move_effect_1: asset_server.load("effects1.mp3"),
         move_effect_2: asset_server.load("effects2.mp3"),
+        outline_texture: asset_server.load("outline.png"),
     });
 }

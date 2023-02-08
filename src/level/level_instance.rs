@@ -180,15 +180,14 @@ impl LevelInstance {
 
     pub fn get_distance_to_ground(&self, position: IVec3, snake_index: i32) -> i32 {
         let mut distance = 1;
-        return 1;
 
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
-        let mut current_position = position + IVec3::NEG_Z;
+        let mut current_position = position + IVec3::NEG_Y;
         while self.is_empty_or_spike(current_position)
             || self.is_snake_with_index(current_position, snake_index)
         {
-            current_position += IVec3::NEG_Z;
+            current_position += IVec3::NEG_Y;
             distance += 1;
 
             // There is no ground below.

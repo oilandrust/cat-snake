@@ -11,10 +11,10 @@ use crate::{
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
     level::level_instance::{LevelEntityType, LevelInstance},
-    level::level_template::{Cell, LevelTemplate},
-    level::levels::LEVELS,
+    level::level_template::LevelTemplate,
     level::test_levels::TEST_LEVELS,
-    GameState,
+    level::{level_template::Cell, levels::LEVELS},
+    Assets, GameAssets, GameState,
 };
 
 use super::{
@@ -179,19 +179,32 @@ fn spawn_level_entities_system(
     mut level_instance: ResMut<LevelInstance>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    assets: Res<GameAssets>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
     }
 
     // light
+    let size = 25.0;
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
+            color: Color::rgb(1.0, 1.0, 1.0),
+            illuminance: 10000.0,
             shadows_enabled: true,
-            illuminance: 15000.0,
+            shadow_projection: OrthographicProjection {
+                left: -size,
+                right: size,
+                bottom: -size,
+                top: size,
+                near: -size,
+                far: size,
+                ..Default::default()
+            },
             ..default()
         },
-        transform: Transform::from_translation(Vec3::ONE).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_translation(Vec3::new(0.5, 1.0, 0.5))
+            .looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
 
@@ -202,6 +215,28 @@ fn spawn_level_entities_system(
     });
 
     // Spawn the ground sprites
+    let ground_material = materials.add(StandardMaterial {
+        base_color: Color::rgb(0.8, 0.7, 0.6),
+        base_color_texture: Some(assets.outline_texture.clone()),
+        ..default()
+    });
+
+    for j in 0..10_i32 {
+        for i in 0..10_i32 {
+            commands.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+                    material: ground_material.clone(),
+                    transform: Transform::from_translation(to_world(IVec3::new(i, 0, j))),
+                    ..default()
+                },
+                LevelEntity,
+            ));
+
+            level_instance.mark_position_occupied(IVec3::new(i, 0, j), LevelEntityType::Wall);
+        }
+    }
+
     for (position, cell) in level_template.grid.iter::<IVec2>() {
         if cell != Cell::Wall {
             continue;
@@ -210,9 +245,9 @@ fn spawn_level_entities_system(
         commands.spawn((
             PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-                material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                material: ground_material.clone(),
                 transform: Transform::from_translation(to_world(IVec3::new(
-                    position.x, 0, position.y,
+                    position.x, 1, position.y,
                 ))),
                 ..default()
             },
@@ -220,7 +255,7 @@ fn spawn_level_entities_system(
         ));
 
         level_instance
-            .mark_position_occupied(IVec3::new(position.x, 0, position.y), LevelEntityType::Wall);
+            .mark_position_occupied(IVec3::new(position.x, 1, position.y), LevelEntityType::Wall);
     }
 
     let mut mesh_builder = MaterialMeshBuilder {
@@ -312,7 +347,7 @@ impl<'a> MaterialMeshBuilder<'a> {
                 subdivisions: 5,
             })),
             material: self.materials.add(FOOD_COLOR.into()),
-            transform: Transform::from_translation(to_world(IVec3::new(position.x, 0, position.y))),
+            transform: Transform::from_translation(to_world(position)),
             ..default()
         }
     }
@@ -326,12 +361,11 @@ pub fn spawn_food(
 ) {
     commands.spawn((
         mesh_builder.build_food_mesh(*position),
-        Food(IVec3::new(position.x, 0, position.y)),
+        Food(*position),
         LevelEntity,
     ));
 
-    level_instance
-        .mark_position_occupied(IVec3::new(position.x, 0, position.y), LevelEntityType::Food);
+    level_instance.mark_position_occupied(*position, LevelEntityType::Food);
 }
 
 pub fn clear_level_system(

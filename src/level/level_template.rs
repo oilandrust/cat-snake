@@ -98,7 +98,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
 
     let parts: Vec<IVec3> = parts
         .into_iter()
-        .map(|position| IVec3::new(position.x, 0, position.y))
+        .map(|position| IVec3::new(position.x, 1, position.y))
         .collect();
 
     if parts.len() < 2 {
@@ -149,7 +149,7 @@ impl LevelTemplate {
         // Set the cells where the snakes are as empty, they are managed as part of the game state.
         for snake in &snakes {
             for part in snake {
-                grid.set_cell(part.0.xy(), Cell::Empty);
+                grid.set_cell(part.0.xz(), Cell::Empty);
             }
         }
 
@@ -160,7 +160,7 @@ impl LevelTemplate {
             .ok_or(ParseLevelError::MissingLevelGoal)?;
 
         let goal_position = grid.position_for_index::<IVec2>(goal_index);
-        let goal_position = IVec3::new(goal_position.x, 0, goal_position.y);
+        let goal_position = IVec3::new(goal_position.x, 1, goal_position.y);
 
         grid.set_cell(goal_position.xz(), Cell::Empty);
 
@@ -168,7 +168,7 @@ impl LevelTemplate {
         let food_positions: Vec<IVec3> = grid
             .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Food)
-            .map(|(position, _)| IVec3::new(position.x, 0, position.y))
+            .map(|(position, _)| IVec3::new(position.x, 1, position.y))
             .collect();
 
         // And set empty.
@@ -180,7 +180,7 @@ impl LevelTemplate {
         let spike_positions: Vec<IVec3> = grid
             .iter::<IVec2>()
             .filter(|(_, cell)| *cell == Cell::Spike)
-            .map(|(position, _)| IVec3::new(position.x, 0, position.y))
+            .map(|(position, _)| IVec3::new(position.x, 1, position.y))
             .collect();
 
         // And set empty.

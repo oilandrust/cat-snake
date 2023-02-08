@@ -268,6 +268,10 @@ pub fn update_snake_transforms_system(
     for (snake, _, children, move_command, _, _) in &mut snake_query {
         for child in children {
             let (mut part_transform, part) = part_query.get_mut(*child).unwrap();
+            if part.part_index > snake.parts().len() - 1 {
+                continue;
+            }
+
             let element = snake.get_part(part.part_index);
 
             let move_offset = move_command.map_or(Vec3::ZERO, |command| {

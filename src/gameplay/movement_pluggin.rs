@@ -15,7 +15,7 @@ use crate::{
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::{level_instance::LevelInstance, level_template::LevelTemplate},
-    Assets, GameState,
+    GameAssets, GameState,
 };
 
 use super::{
@@ -174,6 +174,10 @@ pub fn keyboard_move_command_system(
         Some(IVec3::Z)
     } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
         Some(IVec3::X)
+    } else if keyboard.just_pressed(KeyCode::E) {
+        Some(IVec3::Y)
+    } else if keyboard.just_pressed(KeyCode::Q) {
+        Some(IVec3::NEG_Y)
     } else {
         None
     };
@@ -194,7 +198,7 @@ type WithMovementControlSystemFilter = (
 
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
-    assets: Res<Assets>,
+    assets: Res<GameAssets>,
     audio: Res<Audio>,
     mut level_instance: ResMut<LevelInstance>,
     constants: Res<GameConstants>,

@@ -3,7 +3,7 @@ use bevy_inspector_egui::prelude::*;
 
 pub const MOVE_START_VELOCITY: f32 = 5.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
-pub const GRAVITY: f32 = 300.0;
+pub const GRAVITY: f32 = 30.0;
 
 pub const UP: IVec3 = IVec3::Y;
 pub const DOWN: IVec3 = IVec3::NEG_Y;
