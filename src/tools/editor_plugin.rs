@@ -2,7 +2,7 @@ use std::{fs::File, io::Write};
 
 use bevy::{prelude::*, tasks::IoTaskPool};
 use iyes_loopless::{
-    prelude::{AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem},
+    prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
 };
 use ron::ser::PrettyConfig;
@@ -14,6 +14,9 @@ use crate::{
         level_pluggin::{
             clear_level_runtime_resources_system, spawn_level_entities_system,
             CurrentLevelResourcePath, LevelEntity, LevelLoadedEvent, LevelTemplate, LoadingLevel,
+        },
+        snake_pluggin::{
+            spawn_snake_system, update_snake_transforms_system, Snake, SpawnSnakeEvent,
         },
     },
     level::level_instance::{LevelEntityType, LevelInstance},
@@ -29,16 +32,20 @@ impl Plugin for EditorPlugin {
             .add_enter_system(GameState::Editor, init_level_instance_system)
             .add_exit_system(GameState::Editor, despawn_with::<LevelEntity>)
             .add_exit_system(GameState::Editor, clear_level_runtime_resources_system)
-            .add_system(
-                spawn_level_entities_system
+            .add_system_set(
+                ConditionSet::new()
                     .run_in_state(GameState::Editor)
-                    .run_if_resource_exists::<LevelInstance>(),
+                    .run_if_resource_exists::<LevelInstance>()
+                    .with_system(spawn_level_entities_system)
+                    .with_system(spawn_snake_system)
+                    .into(),
             )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
                     .with_system(add_wall_on_click_system)
                     .with_system(save_level_system)
+                    .with_system(update_snake_transforms_system)
                     .into(),
             )
             .add_system_set(
@@ -56,6 +63,7 @@ fn start_editor_system(
     keyboard: Res<Input<KeyCode>>,
     mut commands: Commands,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::E) {
         return;
@@ -63,6 +71,7 @@ fn start_editor_system(
 
     commands.insert_resource(NextState(GameState::Editor));
     level_loaded_event.send(LevelLoadedEvent);
+    spawn_snake_event.send(SpawnSnakeEvent);
 }
 
 fn init_level_instance_system(mut commands: Commands) {
@@ -86,7 +95,11 @@ fn stop_editor_system(
 
 fn add_wall_on_click_system() {}
 
-fn save_level_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelInstance>) {
+fn save_level_system(
+    keyboard: Res<Input<KeyCode>>,
+    level_instance: Res<LevelInstance>,
+    snake_query: Query<&Snake>,
+) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
         return;
     }
@@ -100,13 +113,33 @@ fn save_level_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelIns
         })
         .collect();
 
+    let foods = level_instance
+        .occupied_cells()
+        .iter()
+        .filter_map(|(position, cell_type)| match cell_type {
+            LevelEntityType::Food => Some(*position),
+            _ => None,
+        })
+        .collect();
+
+    let spikes = level_instance
+        .occupied_cells()
+        .iter()
+        .filter_map(|(position, cell_type)| match cell_type {
+            LevelEntityType::Spike => Some(*position),
+            _ => None,
+        })
+        .collect();
+
+    let snakes = snake_query
+        .iter()
+        .map(|snake| snake.parts().clone().into())
+        .collect();
+
     let template = LevelTemplate {
-        snakes: vec![vec![
-            (IVec3::new(1, 1, 0), IVec3::X),
-            (IVec3::new(0, 1, 0), IVec3::X),
-        ]],
-        foods: vec![IVec3::new(5, 1, 5)],
-        spikes: vec![IVec3::new(10, 1, 10)],
+        snakes,
+        foods,
+        spikes,
         walls,
     };
 

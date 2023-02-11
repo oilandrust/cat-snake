@@ -1,6 +1,6 @@
 use bevy::{
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
-    math::Vec3Swizzles,
+    math::Vec3A,
     prelude::*,
 };
 use iyes_loopless::prelude::ConditionSet;
@@ -24,21 +24,21 @@ impl Plugin for CameraPlugin {
 
 pub fn camera_zoom_scroll_system(
     mut scroll_event: EventReader<MouseWheel>,
-    mut camera: Query<&mut Transform, With<Camera>>,
+    mut camera: Query<&mut GlobalTransform, With<Camera>>,
 ) {
     let Ok(mut camera_transform) = camera.get_single_mut() else {
         return;
     };
 
-    let forward = camera_transform.forward();
+    let forward: Vec3A = camera_transform.forward().into();
 
     for event in scroll_event.iter() {
         match event.unit {
             MouseScrollUnit::Line => {
-                camera_transform.translation += 0.5 * event.y * forward;
+                *camera_transform.translation_mut() += 0.5 * event.y * forward;
             }
             MouseScrollUnit::Pixel => {
-                camera_transform.translation += 0.05 * event.y * forward;
+                *camera_transform.translation_mut() += 0.05 * event.y * forward;
             }
         }
     }
@@ -58,11 +58,7 @@ pub fn camera_pan_system(
     };
 
     for event in motion_event.iter() {
-        let new_pos = (camera_transform.translation()
-            - 0.1 * Vec3::new(event.delta.x, 0.0, event.delta.y))
-        .xyz();
-
-        let new_pos = new_pos.extend(camera_transform.translation().z);
-        *camera_transform.translation_mut() = new_pos.into();
+        let offset = 0.05 * Vec3A::new(event.delta.x, 0.0, event.delta.y);
+        *camera_transform.translation_mut() -= offset;
     }
 }

@@ -30,6 +30,13 @@ impl Plugin for DevToolsPlugin {
                     .with_system(toogle_dev_tools_system)
                     .with_system(inspector_ui_system)
                     .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Editor)
+                    .with_system(toogle_dev_tools_system)
+                    .with_system(inspector_ui_system)
+                    .into(),
             );
     }
 }

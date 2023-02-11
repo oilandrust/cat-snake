@@ -25,6 +25,7 @@ mod gameplay;
 mod level;
 mod menus;
 mod tools;
+mod utils;
 
 // Don't touch this piece, needed for Web
 #[cfg(target_arch = "wasm32")]
