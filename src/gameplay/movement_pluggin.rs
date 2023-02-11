@@ -10,11 +10,9 @@ use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::*,
     gameplay::level_pluggin::Food,
-    gameplay::snake_pluggin::{
-        respawn_snake_on_fall_system, Active, SelectedSnake, Snake, SpawnSnakeEvent,
-    },
+    gameplay::snake_pluggin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::{level_instance::LevelInstance, level_template::LevelTemplate},
+    level::level_instance::LevelInstance,
     GameAssets, GameState,
 };
 
@@ -90,8 +88,7 @@ const SMOOTH_MOVEMENT: &str = "SMOOTH_MOVEMENT";
 
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
-        app.add_event::<SpawnSnakeEvent>()
-            .add_event::<SnakeMovedEvent>()
+        app.add_event::<SnakeMovedEvent>()
             .add_event::<MoveCommandEvent>()
             .add_event::<SnakeReachGoalEvent>()
             .add_event::<SnakeExitedLevelEvent>()
@@ -129,11 +126,14 @@ impl Plugin for MovementPluggin {
                     .label(SNAKE_GROW)
                     .after(SNAKE_MOVEMENT),
             )
-            .add_system(
-                gravity_system
+            .add_system_set(
+                ConditionSet::new()
                     .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
                     .label(SNAKE_FALL)
-                    .after(SNAKE_GROW),
+                    .after(SNAKE_GROW)
+                    .with_system(gravity_system)
+                    .into(),
             )
             .add_system_set(
                 ConditionSet::new()
@@ -516,7 +516,6 @@ pub fn snake_push_anim_system(
 #[allow(clippy::too_many_arguments)]
 pub fn snake_exit_level_anim_system(
     constants: Res<GameConstants>,
-    level: Res<LevelTemplate>,
     mut commands: Commands,
     mut event_despawn_snake_parts: EventWriter<DespawnSnakePartEvent>,
     mut event_snake_exited_level: EventWriter<SnakeExitedLevelEvent>,
@@ -535,19 +534,19 @@ pub fn snake_exit_level_anim_system(
                 continue;
             };
 
-            if modifier.is_some() {
-                if (snake.parts()[part.part_index].0 - level.goal_position)
-                    .abs()
-                    .max_element()
-                    > 1
-                {
-                    event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
-                }
-            } else if snake.parts()[part.part_index].0 == level.goal_position {
-                commands.entity(entity).insert(PartClipper {
-                    clip_position: level.goal_position,
-                });
-            }
+            // if modifier.is_some() {
+            //     if (snake.parts()[part.part_index].0 - level.goal_position)
+            //         .abs()
+            //         .max_element()
+            //         > 1
+            //     {
+            //         event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
+            //     }
+            // } else if snake.parts()[part.part_index].0 == level.goal_position {
+            //     commands.entity(entity).insert(PartClipper {
+            //         clip_position: level.goal_position,
+            //     });
+            // }
         }
 
         if move_command.is_some() {

@@ -1,34 +1,43 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, fs::File, io::Write};
 
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    asset::{AssetLoader, LoadContext, LoadedAsset},
+    prelude::*,
+    reflect::TypeUuid,
+    tasks::IoTaskPool,
+    utils::BoxedFuture,
+};
 use bevy_prototype_lyon::prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
+use ron::ser::PrettyConfig;
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::to_world,
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
     level::level_instance::{LevelEntityType, LevelInstance},
-    level::level_template::LevelTemplate,
+    level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
-    level::{level_template::Cell, levels::LEVELS},
     Assets, GameAssets, GameState,
 };
 
 use super::{
     game_constants_pluggin::{FOOD_COLOR, SPIKE_COLOR},
     movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
-    snake_pluggin::MaterialMeshBuilder,
+    snake_pluggin::{MaterialMeshBuilder, SnakeTemplate},
 };
+
+use serde::{Deserialize, Serialize};
 
 pub struct StartLevelEventWithIndex(pub usize);
 pub struct StartTestLevelEventWithIndex(pub usize);
-pub struct StartLevelEventWithLevel(pub String);
+pub struct StartLevelEventWithLevelAssetPath(pub String);
+pub struct LevelLoadedEvent;
 pub struct ClearLevelEvent;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct LevelEntity;
 
 #[derive(Component, Clone, Copy)]
@@ -54,9 +63,12 @@ static CHEK_LEVEL_CONDITION_LABEL: &str = "CheckLevelCondition";
 
 impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
-        app.add_event::<StartLevelEventWithIndex>()
+        app.add_asset::<LevelTemplate>()
+            .init_asset_loader::<LevelTemplateLoader>()
+            .add_event::<StartLevelEventWithIndex>()
             .add_event::<StartTestLevelEventWithIndex>()
-            .add_event::<StartLevelEventWithLevel>()
+            .add_event::<StartLevelEventWithLevelAssetPath>()
+            .add_event::<LevelLoadedEvent>()
             .add_event::<ClearLevelEvent>()
             .add_stage_before(
                 CoreStage::PreUpdate,
@@ -82,8 +94,16 @@ impl Plugin for LevelPluggin {
                     .after(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
+                LOAD_LEVEL_STAGE,
+                notify_level_loaded_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LoadingLevel>(),
+            )
+            .add_system_to_stage(
                 CoreStage::PreUpdate,
-                spawn_level_entities_system.run_in_state(GameState::Game),
+                spawn_level_entities_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LoadedLevel>(),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -116,21 +136,61 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_system(rotate_goal_system.run_in_state(GameState::Game));
+            .add_system(rotate_goal_system.run_in_state(GameState::Game))
+            .add_system(
+                save_scene_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>(),
+            );
+    }
+}
+
+#[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug)]
+#[uuid = "39cadc56-aa9c-4543-8640-a018b74b5052"]
+pub struct LevelTemplate {
+    pub snakes: Vec<SnakeTemplate>,
+    pub foods: Vec<IVec3>,
+    pub walls: Vec<IVec3>,
+}
+
+#[derive(Resource)]
+struct LoadingLevel(Handle<LevelTemplate>);
+
+#[derive(Resource)]
+pub struct LoadedLevel(pub Handle<LevelTemplate>);
+
+#[derive(Default)]
+pub struct LevelTemplateLoader;
+
+impl AssetLoader for LevelTemplateLoader {
+    fn load<'a>(
+        &'a self,
+        bytes: &'a [u8],
+        load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<(), bevy::asset::Error>> {
+        Box::pin(async move {
+            let custom_asset = ron::de::from_bytes::<LevelTemplate>(bytes)?;
+            load_context.set_default_asset(LoadedAsset::new(custom_asset));
+            Ok(())
+        })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["lvl"]
     }
 }
 
 fn load_level_with_index_system(
     mut commands: Commands,
     mut event_start_level_with_index: EventReader<StartLevelEventWithIndex>,
-    mut event_start_level: EventWriter<StartLevelEventWithLevel>,
+    mut event_start_level: EventWriter<StartLevelEventWithLevelAssetPath>,
 ) {
     let Some(event) = event_start_level_with_index.iter().next() else {
         return;
     };
 
     let next_level_index = event.0;
-    event_start_level.send(StartLevelEventWithLevel(
+    event_start_level.send(StartLevelEventWithLevelAssetPath(
         LEVELS[next_level_index].to_owned(),
     ));
 
@@ -140,14 +200,14 @@ fn load_level_with_index_system(
 fn load_test_level_with_index_system(
     mut commands: Commands,
     mut event_start_level_with_index: EventReader<StartTestLevelEventWithIndex>,
-    mut event_start_level: EventWriter<StartLevelEventWithLevel>,
+    mut event_start_level: EventWriter<StartLevelEventWithLevelAssetPath>,
 ) {
     let Some(event) = event_start_level_with_index.iter().next() else {
         return;
     };
 
     let next_level_index = event.0;
-    event_start_level.send(StartLevelEventWithLevel(
+    event_start_level.send(StartLevelEventWithLevelAssetPath(
         TEST_LEVELS[next_level_index].to_owned(),
     ));
 
@@ -156,34 +216,68 @@ fn load_test_level_with_index_system(
 
 pub fn load_level_system(
     mut commands: Commands,
-    mut event_start_level: EventReader<StartLevelEventWithLevel>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    mut event_start_level: EventReader<StartLevelEventWithLevelAssetPath>,
+    asset_server: Res<AssetServer>,
 ) {
     let Some(event) = event_start_level.iter().next() else {
         return;
     };
 
-    let level = LevelTemplate::parse(&event.0).unwrap();
+    let template: Handle<LevelTemplate> = asset_server.load(&event.0);
+    commands.insert_resource(LoadingLevel(template));
+}
 
-    commands.insert_resource(SnakeHistory::default());
-    commands.insert_resource(level);
-    commands.insert_resource(LevelInstance::new());
+fn notify_level_loaded_system(
+    mut commands: Commands,
+    level_loading: Res<LoadingLevel>,
+    asset_server: Res<AssetServer>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    mut level_loaded_event: EventWriter<LevelLoadedEvent>,
+) {
+    let load_state = asset_server.get_load_state(&level_loading.0);
+    match load_state {
+        bevy::asset::LoadState::Loaded => {
+            commands.remove_resource::<LoadingLevel>();
 
-    spawn_snake_event.send(SpawnSnakeEvent);
+            commands.insert_resource(LoadedLevel(level_loading.0.clone()));
+            commands.insert_resource(SnakeHistory::default());
+            commands.insert_resource(LevelInstance::new());
+
+            spawn_snake_event.send(SpawnSnakeEvent);
+            level_loaded_event.send(LevelLoadedEvent);
+        }
+        bevy::asset::LoadState::Failed => panic!("Failed loading level"),
+        _ => {}
+    }
 }
 
 fn spawn_level_entities_system(
+    level_loaded_event: EventReader<LevelLoadedEvent>,
     mut commands: Commands,
-    mut event_start_level: EventReader<StartLevelEventWithLevel>,
-    level_template: Res<LevelTemplate>,
     mut level_instance: ResMut<LevelInstance>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     assets: Res<GameAssets>,
+    loaded_level: Res<LoadedLevel>,
+    level_templates: ResMut<Assets<LevelTemplate>>,
 ) {
-    if event_start_level.iter().next().is_none() {
+    if level_loaded_event.is_empty() {
         return;
     }
+    level_loaded_event.clear();
+
+    let level_template = level_templates
+        .get(&loaded_level.0)
+        .expect("Level should be loaded here!");
+
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_translation(Vec3::ZERO + 10.0 * Vec3::Y + 5.0 * Vec3::Z)
+                .looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        },
+        LevelEntity,
+    ));
 
     // light
     let size = 25.0;
@@ -208,106 +302,77 @@ fn spawn_level_entities_system(
         ..default()
     });
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 25.0 })),
-        material: materials.add(Color::BEIGE.into()),
-        ..default()
-    });
-
-    // Spawn the ground sprites
+    // Spawn the wall blocks
     let ground_material = materials.add(StandardMaterial {
         base_color: Color::rgb(0.8, 0.7, 0.6),
         base_color_texture: Some(assets.outline_texture.clone()),
         ..default()
     });
 
-    for j in 0..10_i32 {
-        for i in 0..10_i32 {
-            commands.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-                    material: ground_material.clone(),
-                    transform: Transform::from_translation(to_world(IVec3::new(i, 0, j))),
-                    ..default()
-                },
-                LevelEntity,
-            ));
-
-            level_instance.mark_position_occupied(IVec3::new(i, 0, j), LevelEntityType::Wall);
-        }
-    }
-
-    for (position, cell) in level_template.grid.iter::<IVec2>() {
-        if cell != Cell::Wall {
-            continue;
-        }
-
+    for position in &level_template.walls {
         commands.spawn((
             PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
                 material: ground_material.clone(),
-                transform: Transform::from_translation(to_world(IVec3::new(
-                    position.x, 1, position.y,
-                ))),
+                transform: Transform::from_translation(position.as_vec3()),
                 ..default()
             },
             LevelEntity,
         ));
 
-        level_instance
-            .mark_position_occupied(IVec3::new(position.x, 1, position.y), LevelEntityType::Wall);
+        level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
     }
 
-    let mut mesh_builder = MaterialMeshBuilder {
-        meshes: meshes.as_mut(),
-        materials: materials.as_mut(),
+    // // Spawn the food sprites.
+    // for position in &level_template.food_positions {
+    //     spawn_food(
+    //         &mut mesh_builder,
+    //         &mut commands,
+    //         position,
+    //         &mut level_instance,
+    //     );
+    // }
+
+    // // Spawn the spikes sprites.
+    // for position in &level_template.spike_positions {
+    //     spawn_spike(&mut commands, position, &mut level_instance);
+    // }
+}
+
+fn save_scene_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelInstance>) {
+    if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
+        return;
+    }
+
+    let walls = level_instance
+        .occupied_cells()
+        .iter()
+        .filter_map(|(position, cell_type)| match cell_type {
+            LevelEntityType::Wall => Some(*position),
+            _ => None,
+        })
+        .collect();
+
+    let template = LevelTemplate {
+        snakes: vec![vec![
+            (IVec3::new(1, 1, 0), IVec3::X),
+            (IVec3::new(0, 1, 0), IVec3::X),
+        ]],
+        foods: vec![IVec3::new(5, 1, 5)],
+        walls,
     };
 
-    // Spawn the food sprites.
-    for position in &level_template.food_positions {
-        spawn_food(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-        );
-    }
+    let ron_string = ron::ser::to_string_pretty(&template, PrettyConfig::default()).unwrap();
 
-    // Spawn the spikes sprites.
-    for position in &level_template.spike_positions {
-        spawn_spike(&mut commands, position, &mut level_instance);
-    }
-
-    // Spawn level goal.
-    {
-        let mut path_builder = PathBuilder::new();
-        let subdivisions = 14;
-        for i in 0..subdivisions {
-            let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
-            let position = Vec2::new(angle.cos(), angle.sin());
-            let offset = 0.8 + (i % 2) as f32;
-            let radius = 0.5 * offset;
-            path_builder.line_to(radius * position);
-        }
-        path_builder.close();
-
-        let path = path_builder.build();
-
-        let goal_world_position = to_world(level_template.goal_position);
-
-        commands.spawn((
-            GeometryBuilder::build_as(
-                &path,
-                DrawMode::Fill(FillMode::color(Color::rgb_u8(250, 227, 25))),
-                Transform {
-                    translation: goal_world_position,
-                    ..default()
-                },
-            ),
-            Goal(level_template.goal_position),
-            LevelEntity,
-        ));
-    }
+    #[cfg(not(target_arch = "wasm32"))]
+    IoTaskPool::get()
+        .spawn(async move {
+            // Write the scene RON data to file
+            File::create("assets/level1.lvl")
+                .and_then(|mut file| file.write(ron_string.as_bytes()))
+                .expect("Error while writing scene to file");
+        })
+        .detach();
 }
 
 pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &mut LevelInstance) {
@@ -329,7 +394,7 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &m
             &path,
             DrawMode::Fill(FillMode::color(SPIKE_COLOR)),
             Transform {
-                translation: to_world(*position),
+                translation: position.as_vec3(),
                 ..default()
             },
         ))
@@ -347,7 +412,7 @@ impl<'a> MaterialMeshBuilder<'a> {
                 subdivisions: 5,
             })),
             material: self.materials.add(FOOD_COLOR.into()),
-            transform: Transform::from_translation(to_world(position)),
+            transform: Transform::from_translation(position.as_vec3()),
             ..default()
         }
     }
@@ -504,5 +569,25 @@ pub fn finish_snake_exit_level_system(
             event_clear_level.send(ClearLevelEvent);
             event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test_serialization() {
+        let template = LevelTemplate {
+            snakes: vec![],
+            foods: vec![],
+            walls: vec![IVec3::ZERO],
+        };
+
+        let level = "(snakes:[],foods:[],walls:[(5,0,1)])";
+
+        let custom_asset = ron::de::from_bytes::<LevelTemplate>(level.as_bytes());
+        print!("{:?}", custom_asset);
+        assert!(custom_asset.is_ok());
     }
 }

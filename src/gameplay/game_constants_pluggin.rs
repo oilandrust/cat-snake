@@ -2,13 +2,8 @@ use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 
 pub const MOVE_START_VELOCITY: f32 = 5.0;
-pub const JUMP_START_VELOCITY: f32 = 65.0;
+pub const JUMP_START_VELOCITY: f32 = 6.0;
 pub const GRAVITY: f32 = 30.0;
-
-pub const UP: IVec3 = IVec3::Y;
-pub const DOWN: IVec3 = IVec3::NEG_Y;
-pub const RIGHT: IVec3 = IVec3::X;
-pub const LEFT: IVec3 = IVec3::NEG_X;
 
 macro_rules! rgb_u8 {
     ($r:expr, $g:expr, $b:expr) => {
@@ -44,14 +39,6 @@ pub const SNAKE_COLORS: [[Color; 2]; 3] = [
     ],
     [rgb_u8!(66, 135, 245), rgb_u8!(105, 159, 245)],
 ];
-
-pub fn to_world(position: IVec3) -> Vec3 {
-    position.as_vec3() + 0.5
-}
-
-pub fn to_grid(position: Vec3) -> IVec3 {
-    (position - 0.5).round().as_ivec3()
-}
 
 #[derive(Resource, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]

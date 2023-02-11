@@ -2,14 +2,10 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::bevy_inspector;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
-use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use bevy_prototype_debug_lines::DebugLinesPlugin;
 use iyes_loopless::prelude::ConditionSet;
 
-use crate::gameplay::game_constants_pluggin::to_world;
 use crate::gameplay::game_constants_pluggin::GameConstants;
-use crate::gameplay::level_pluggin::LevelEntity;
-use crate::level::level_instance::LevelEntityType;
-use crate::level::level_instance::LevelInstance;
 use crate::GameState;
 
 pub struct DevToolsPlugin;
@@ -33,14 +29,6 @@ impl Plugin for DevToolsPlugin {
                     .run_in_state(GameState::Game)
                     .with_system(toogle_dev_tools_system)
                     .with_system(inspector_ui_system)
-                    .into(),
-            )
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .with_system(draw_transforms_system)
-                    .with_system(debug_draw_level_cells)
                     .into(),
             );
     }
@@ -88,77 +76,4 @@ fn inspector_ui_system(world: &mut World) {
             bevy_inspector::ui_for_world(world, ui);
         });
     });
-}
-
-pub fn draw_cross(lines: &mut DebugLines, position: Vec3, color: Color) {
-    lines.line_colored(
-        position + Vec3::new(0.5, 0.5, 0.0),
-        position + Vec3::new(-0.5, -0.5, 0.0),
-        0.,
-        color,
-    );
-
-    lines.line_colored(
-        position + Vec3::new(-0.5, 0.5, 0.0),
-        position + Vec3::new(0.5, -0.5, 0.0),
-        0.,
-        color,
-    );
-}
-
-fn debug_draw_level_cells(
-    dev_tool_settings: Res<DevToolsSettings>,
-    mut lines: ResMut<DebugLines>,
-    level: Res<LevelInstance>,
-) {
-    if !dev_tool_settings.dev_tools_enabled {
-        return;
-    }
-
-    for (position, value) in level.occupied_cells() {
-        let world_grid = to_world(*position);
-        let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
-
-        let color = match value {
-            LevelEntityType::Food => Color::RED,
-            LevelEntityType::Wall => Color::BLACK,
-            LevelEntityType::Snake(_) => Color::BLUE,
-            LevelEntityType::Spike => Color::DARK_GRAY,
-        };
-
-        draw_cross(lines.as_mut(), world_grid, color);
-    }
-}
-
-fn draw_transforms_system(
-    dev_tool_settings: Res<DevToolsSettings>,
-    mut lines: ResMut<DebugLines>,
-    query: Query<&GlobalTransform, With<LevelEntity>>,
-) {
-    if !dev_tool_settings.dev_tools_enabled {
-        return;
-    }
-
-    for transform in &query {
-        lines.line_colored(
-            transform.translation(),
-            transform.translation() + 2.0 * transform.right(),
-            0.,
-            Color::RED,
-        );
-
-        lines.line_colored(
-            transform.translation(),
-            transform.translation() + 2.0 * transform.up(),
-            0.,
-            Color::GREEN,
-        );
-
-        lines.line_colored(
-            transform.translation(),
-            transform.translation() + 2.0 * transform.back(),
-            0.,
-            Color::BLUE,
-        );
-    }
 }

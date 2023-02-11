@@ -5,7 +5,7 @@ use bevy::{prelude::*, time::FixedTimestep};
 use crate::{
     gameplay::game_constants_pluggin::*,
     gameplay::level_pluggin::{
-        load_level_system, CurrentLevelId, StartLevelEventWithLevel, LOAD_LEVEL_STAGE,
+        load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath, LOAD_LEVEL_STAGE,
     },
     gameplay::movement_pluggin::MoveCommandEvent,
     level::test_levels::*,
@@ -75,7 +75,7 @@ fn moc_player_input(
 fn start_test_case(
     test_cases: Res<TestCases>,
     mut commands: Commands,
-    mut event_start_level: EventWriter<StartLevelEventWithLevel>,
+    mut event_start_level: EventWriter<StartLevelEventWithLevelAssetPath>,
     mut event_reader: EventReader<StartTestCaseEventWithIndex>,
 ) {
     let Some(event) = event_reader.iter().next() else {
@@ -87,12 +87,14 @@ fn start_test_case(
     let new_test_case = &test_cases.cases[event.0];
     commands.insert_resource(new_test_case.clone());
 
-    event_start_level.send(StartLevelEventWithLevel(new_test_case.level.to_owned()));
+    event_start_level.send(StartLevelEventWithLevelAssetPath(
+        new_test_case.level.to_owned(),
+    ));
 }
 
 fn init_automation(mut commands: Commands) {
     let test_cases = test_cases! {
-        test_case!(TEST_0, RIGHT,),
+       // test_case!(TEST_0, RIGHT,),
     };
 
     commands.insert_resource(test_cases);

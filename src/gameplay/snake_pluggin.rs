@@ -5,14 +5,15 @@ use std::collections::VecDeque;
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::{to_grid, to_world, SNAKE_COLORS},
+    gameplay::game_constants_pluggin::SNAKE_COLORS,
     gameplay::level_pluggin::LevelEntity,
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{LevelEntityType, LevelInstance},
-    level::level_template::{LevelTemplate, SnakeTemplate},
     GameState,
 };
+
+use super::level_pluggin::{LevelTemplate, LoadedLevel};
 
 pub struct SnakePluggin;
 
@@ -41,7 +42,7 @@ impl Plugin for SnakePluggin {
                 CoreStage::PostUpdate,
                 despawn_snake_system
                     .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelTemplate>(),
+                    .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -53,6 +54,9 @@ impl Plugin for SnakePluggin {
             );
     }
 }
+
+pub type SnakeElement = (IVec3, IVec3);
+pub type SnakeTemplate = Vec<SnakeElement>;
 
 #[derive(PartialEq, Eq)]
 pub struct DespawnSnakePartEvent(pub SnakePart);
@@ -101,7 +105,7 @@ impl<'a> MaterialMeshBuilder<'a> {
             shape: PbrBundle {
                 mesh: self.meshes.add(Mesh::from(shape::Cube { size })),
                 material: self.materials.add(color.into()),
-                global_transform: GlobalTransform::from_translation(to_world(position)),
+                global_transform: GlobalTransform::from_translation(position.as_vec3()),
                 ..default()
             },
             part: SnakePart {
@@ -117,8 +121,6 @@ impl<'a> MaterialMeshBuilder<'a> {
 pub struct PartClipper {
     pub clip_position: IVec3,
 }
-
-pub type SnakeElement = (IVec3, IVec3);
 
 #[derive(Component, Debug)]
 pub struct Snake {
@@ -261,7 +263,7 @@ pub fn update_snake_transforms_system(
             initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
-        transform.translation = to_world(snake.head_position()) + fall_offset + push_offset;
+        transform.translation = snake.head_position().as_vec3() + fall_offset + push_offset;
 
         //transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Y));
     }
@@ -303,23 +305,28 @@ pub fn set_snake_active(
 }
 
 pub fn spawn_snake_system(
-    level: Res<LevelTemplate>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut level_instance: ResMut<LevelInstance>,
     mut commands: Commands,
     mut event_spawn_snake: EventReader<SpawnSnakeEvent>,
+    loaded_level: Res<LoadedLevel>,
+    level_templates: ResMut<Assets<LevelTemplate>>,
 ) {
     if event_spawn_snake.iter().next().is_none() {
         return;
     }
+
+    let level_template = level_templates
+        .get(&loaded_level.0)
+        .expect("Level should be loaded here!");
 
     let mut part_builder = MaterialMeshBuilder {
         meshes: meshes.as_mut(),
         materials: materials.as_mut(),
     };
 
-    for (snake_index, snake_template) in level.initial_snakes.iter().enumerate() {
+    for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
         let entity = spawn_snake(
             &mut part_builder,
             &mut commands,
@@ -360,7 +367,7 @@ pub fn select_snake_mouse_system(
         ndc_to_world.project_point3(ndc.extend(-1.0))
     };
 
-    let mouse_grid_position = to_grid(mouse_world_position);
+    let mouse_grid_position = mouse_world_position.round().as_ivec3();
     let selected_snake_entity = selected_snake.single();
 
     for (entity, snake) in unselected_snakes.iter() {

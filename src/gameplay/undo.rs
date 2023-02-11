@@ -5,10 +5,9 @@ use crate::{
     gameplay::movement_pluggin::GravityFall,
     gameplay::snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
     level::level_instance::{LevelEntityType, LevelInstance},
-    level::level_template::SnakeTemplate,
 };
 
-use super::snake_pluggin::{MaterialMeshBuilder, SnakeElement};
+use super::snake_pluggin::{MaterialMeshBuilder, SnakeElement, SnakeTemplate};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityUpdateEvent {
