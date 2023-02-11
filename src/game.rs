@@ -18,6 +18,7 @@ use menus::main_menu::MainMenuPlugin;
 use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
 use menus::MenuPlugin;
 use tools::dev_tools_pluggin::DevToolsPlugin;
+use tools::editor_plugin::EditorPlugin;
 
 pub mod args;
 mod gameplay;
@@ -34,6 +35,7 @@ pub enum GameState {
     MainMenu,
     SelectLevelMenu,
     Game,
+    Editor,
 }
 
 pub struct GamePlugin {
@@ -56,6 +58,7 @@ impl Plugin for GamePlugin {
             .add_plugin(CameraPlugin)
             .add_plugin(DevToolsPlugin)
             .add_plugin(TweeningPlugin)
+            .add_plugin(EditorPlugin)
             .insert_resource(self.args.clone())
             .insert_resource(NextLevel(self.args.level.unwrap_or(0)));
 
@@ -67,13 +70,22 @@ impl Plugin for GamePlugin {
     }
 }
 
+#[derive(Default)]
+struct RunOnce(bool);
+
 fn enter_game_system(
     args: Res<Args>,
     next_level: Res<NextLevel>,
     // mut start_test_case_event: EventWriter<StartTestCaseEventWithIndex>,
     mut start_test_level_event: EventWriter<StartTestLevelEventWithIndex>,
     mut start_level_event: EventWriter<StartLevelEventWithIndex>,
+    mut was_run: Local<RunOnce>,
 ) {
+    if was_run.0 {
+        return;
+    }
+    was_run.0 = true;
+
     match args.command {
         Some(args::Commands::Test { test_case: _ }) => {
             // let start_test_case = test_case.unwrap_or(0);

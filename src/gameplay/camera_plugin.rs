@@ -22,7 +22,7 @@ impl Plugin for CameraPlugin {
     }
 }
 
-fn camera_zoom_scroll_system(
+pub fn camera_zoom_scroll_system(
     mut scroll_event: EventReader<MouseWheel>,
     mut camera: Query<&mut Transform, With<Camera>>,
 ) {
@@ -44,7 +44,7 @@ fn camera_zoom_scroll_system(
     }
 }
 
-fn camera_pan_system(
+pub fn camera_pan_system(
     mut motion_event: EventReader<MouseMotion>,
     buttons: Res<Input<MouseButton>>,
     mut camera: Query<&mut GlobalTransform, With<Camera>>,

@@ -1,16 +1,14 @@
-use std::{fs::File, io::Write};
-
 use bevy::{
     app::AppExit,
     asset::{AssetLoader, LoadContext, LoadedAsset},
     prelude::*,
     reflect::TypeUuid,
-    tasks::IoTaskPool,
     utils::BoxedFuture,
 };
 
-use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
-use ron::ser::PrettyConfig;
+use iyes_loopless::prelude::{
+    AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem,
+};
 
 use crate::{
     gameplay::commands::SnakeCommands,
@@ -52,6 +50,9 @@ pub struct Goal(pub IVec3);
 #[derive(Resource)]
 pub struct CurrentLevelId(pub usize);
 
+#[derive(Resource)]
+pub struct CurrentLevelResourcePath(pub String);
+
 pub struct LevelPluggin;
 
 #[derive(Component, Clone, Copy)]
@@ -65,45 +66,34 @@ impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
         app.add_asset::<LevelTemplate>()
             .init_asset_loader::<LevelTemplateLoader>()
+            .add_exit_system(GameState::Game, clear_level_runtime_resources_system)
             .add_event::<StartLevelEventWithIndex>()
             .add_event::<StartTestLevelEventWithIndex>()
             .add_event::<StartLevelEventWithLevelAssetPath>()
             .add_event::<LevelLoadedEvent>()
             .add_event::<ClearLevelEvent>()
-            .add_stage_before(
+            .add_system_set_to_stage(
                 CoreStage::PreUpdate,
-                LOAD_LEVEL_STAGE,
-                SystemStage::single_threaded(),
-            )
-            .add_system_to_stage(
-                LOAD_LEVEL_STAGE,
-                load_level_with_index_system
+                ConditionSet::new()
                     .run_in_state(GameState::Game)
-                    .label(PRE_LOAD_LEVEL_LABEL),
+                    .with_system(load_level_with_index_system)
+                    .with_system(load_test_level_with_index_system)
+                    .with_system(load_level_system)
+                    .into(),
             )
             .add_system_to_stage(
-                LOAD_LEVEL_STAGE,
-                load_test_level_with_index_system
-                    .run_in_state(GameState::Game)
-                    .label(PRE_LOAD_LEVEL_LABEL),
-            )
-            .add_system_to_stage(
-                LOAD_LEVEL_STAGE,
-                load_level_system
-                    .run_in_state(GameState::Game)
-                    .after(PRE_LOAD_LEVEL_LABEL),
-            )
-            .add_system_to_stage(
-                LOAD_LEVEL_STAGE,
+                CoreStage::PreUpdate,
                 notify_level_loaded_system
                     .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LoadingLevel>(),
+                    .run_if_resource_exists::<LoadingLevel>()
+                    .label(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
                 CoreStage::PreUpdate,
                 spawn_level_entities_system
                     .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LoadedLevel>(),
+                    .run_if_resource_exists::<LevelInstance>()
+                    .after(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -136,12 +126,7 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_system(rotate_goal_system.run_in_state(GameState::Game))
-            .add_system(
-                save_scene_system
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>(),
-            );
+            .add_system(rotate_goal_system.run_in_state(GameState::Game));
     }
 }
 
@@ -155,7 +140,7 @@ pub struct LevelTemplate {
 }
 
 #[derive(Resource)]
-struct LoadingLevel(Handle<LevelTemplate>);
+pub struct LoadingLevel(pub Handle<LevelTemplate>);
 
 #[derive(Resource)]
 pub struct LoadedLevel(pub Handle<LevelTemplate>);
@@ -196,6 +181,9 @@ fn load_level_with_index_system(
     ));
 
     commands.insert_resource(CurrentLevelId(next_level_index));
+    commands.insert_resource(CurrentLevelResourcePath(
+        LEVELS[next_level_index].to_owned(),
+    ));
 }
 
 fn load_test_level_with_index_system(
@@ -213,6 +201,9 @@ fn load_test_level_with_index_system(
     ));
 
     commands.insert_resource(CurrentLevelId(next_level_index));
+    commands.insert_resource(CurrentLevelResourcePath(
+        TEST_LEVELS[next_level_index].to_owned(),
+    ));
 }
 
 pub fn load_level_system(
@@ -252,8 +243,13 @@ fn notify_level_loaded_system(
     }
 }
 
+pub fn clear_level_runtime_resources_system(mut commands: Commands) {
+    commands.remove_resource::<LevelInstance>();
+    commands.remove_resource::<SnakeHistory>();
+}
+
 #[allow(clippy::too_many_arguments)]
-fn spawn_level_entities_system(
+pub fn spawn_level_entities_system(
     level_loaded_event: EventReader<LevelLoadedEvent>,
     mut commands: Commands,
     mut level_instance: ResMut<LevelInstance>,
@@ -283,26 +279,29 @@ fn spawn_level_entities_system(
 
     // light
     let size = 25.0;
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::rgb(1.0, 1.0, 1.0),
-            illuminance: 10000.0,
-            shadows_enabled: true,
-            shadow_projection: OrthographicProjection {
-                left: -size,
-                right: size,
-                bottom: -size,
-                top: size,
-                near: -size,
-                far: size,
-                ..Default::default()
+    commands.spawn((
+        DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                color: Color::rgb(1.0, 1.0, 1.0),
+                illuminance: 10000.0,
+                shadows_enabled: true,
+                shadow_projection: OrthographicProjection {
+                    left: -size,
+                    right: size,
+                    bottom: -size,
+                    top: size,
+                    near: -size,
+                    far: size,
+                    ..Default::default()
+                },
+                ..default()
             },
+            transform: Transform::from_translation(Vec3::new(0.5, 1.0, 0.5))
+                .looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(0.5, 1.0, 0.5))
-            .looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+        LevelEntity,
+    ));
 
     // Spawn the wall blocks
     let ground_material = materials.add(StandardMaterial {
@@ -349,43 +348,6 @@ fn spawn_level_entities_system(
             &mut level_instance,
         );
     }
-}
-
-fn save_scene_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelInstance>) {
-    if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
-        return;
-    }
-
-    let walls = level_instance
-        .occupied_cells()
-        .iter()
-        .filter_map(|(position, cell_type)| match cell_type {
-            LevelEntityType::Wall => Some(*position),
-            _ => None,
-        })
-        .collect();
-
-    let template = LevelTemplate {
-        snakes: vec![vec![
-            (IVec3::new(1, 1, 0), IVec3::X),
-            (IVec3::new(0, 1, 0), IVec3::X),
-        ]],
-        foods: vec![IVec3::new(5, 1, 5)],
-        spikes: vec![IVec3::new(10, 1, 10)],
-        walls,
-    };
-
-    let ron_string = ron::ser::to_string_pretty(&template, PrettyConfig::default()).unwrap();
-
-    #[cfg(not(target_arch = "wasm32"))]
-    IoTaskPool::get()
-        .spawn(async move {
-            // Write the scene RON data to file
-            File::create("assets/level1.lvl")
-                .and_then(|mut file| file.write(ron_string.as_bytes()))
-                .expect("Error while writing scene to file");
-        })
-        .detach();
 }
 
 pub fn spawn_spike(

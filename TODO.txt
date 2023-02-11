@@ -1,2 +1,12 @@
 Cleanup:
-    * Clean warnings
+    * Better loading and stages with resource dependencies
+    * Fix high CPU usage
+    * Fix and test game mode and automated tests
+
+Editor:
+    * Editor game state
+    * Transitions between states
+    * Click to add wall
+    * Click to add other entity types
+    * Move entities.
+    * Remove entities.
