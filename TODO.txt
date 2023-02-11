@@ -1,6 +1,2 @@
-
-Port to 3D:
-    * 3D camera
-    * 3D geometry: Cubes
-    * Cube for snake
-
+Cleanup:
+    * Clean warnings

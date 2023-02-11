@@ -1,5 +1,4 @@
 use bevy::{prelude::*, transform::TransformSystem};
-use bevy_prototype_lyon::prelude::ShapePlugin;
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::collections::VecDeque;
 
@@ -19,8 +18,7 @@ pub struct SnakePluggin;
 
 impl Plugin for SnakePluggin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(ShapePlugin)
-            .add_event::<SpawnSnakeEvent>()
+        app.add_event::<SpawnSnakeEvent>()
             .add_event::<DespawnSnakePartEvent>()
             .add_event::<DespawnSnakeEvent>()
             .add_event::<DespawnSnakePartsEvent>()

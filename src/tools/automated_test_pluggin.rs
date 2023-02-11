@@ -3,12 +3,10 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    gameplay::game_constants_pluggin::*,
     gameplay::level_pluggin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath, LOAD_LEVEL_STAGE,
     },
     gameplay::movement_pluggin::MoveCommandEvent,
-    level::test_levels::*,
 };
 
 #[derive(Clone)]
@@ -26,7 +24,7 @@ struct TestCases {
 }
 
 macro_rules! test_case {
-    ($name:ident, $($move:ident,)+) => {
+    ($name:expr, $($move:ident,)+) => {
         TestCase {
             level: $name,
             moves: VecDeque::from([$(TestInputCommand($move),)+]),
@@ -92,9 +90,11 @@ fn start_test_case(
     ));
 }
 
+const RIGHT: IVec3 = IVec3::X;
+
 fn init_automation(mut commands: Commands) {
     let test_cases = test_cases! {
-       // test_case!(TEST_0, RIGHT,),
+        test_case!("test_eat.lvl", RIGHT,),
     };
 
     commands.insert_resource(test_cases);

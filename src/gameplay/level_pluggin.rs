@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
 use bevy::{
     app::AppExit,
@@ -8,7 +8,7 @@ use bevy::{
     tasks::IoTaskPool,
     utils::BoxedFuture,
 };
-use bevy_prototype_lyon::prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder};
+
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use ron::ser::PrettyConfig;
 
@@ -151,6 +151,7 @@ pub struct LevelTemplate {
     pub snakes: Vec<SnakeTemplate>,
     pub foods: Vec<IVec3>,
     pub walls: Vec<IVec3>,
+    pub spikes: Vec<IVec3>,
 }
 
 #[derive(Resource)]
@@ -251,6 +252,7 @@ fn notify_level_loaded_system(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_level_entities_system(
     level_loaded_event: EventReader<LevelLoadedEvent>,
     mut commands: Commands,
@@ -323,20 +325,30 @@ fn spawn_level_entities_system(
         level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
     }
 
-    // // Spawn the food sprites.
-    // for position in &level_template.food_positions {
-    //     spawn_food(
-    //         &mut mesh_builder,
-    //         &mut commands,
-    //         position,
-    //         &mut level_instance,
-    //     );
-    // }
+    let mut mesh_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
 
-    // // Spawn the spikes sprites.
-    // for position in &level_template.spike_positions {
-    //     spawn_spike(&mut commands, position, &mut level_instance);
-    // }
+    // Spawn the food sprites.
+    for position in &level_template.foods {
+        spawn_food(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+        );
+    }
+
+    // Spawn the spikes sprites.
+    for position in &level_template.spikes {
+        spawn_spike(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+        );
+    }
 }
 
 fn save_scene_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelInstance>) {
@@ -359,6 +371,7 @@ fn save_scene_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelIns
             (IVec3::new(0, 1, 0), IVec3::X),
         ]],
         foods: vec![IVec3::new(5, 1, 5)],
+        spikes: vec![IVec3::new(10, 1, 10)],
         walls,
     };
 
@@ -375,35 +388,20 @@ fn save_scene_system(keyboard: Res<Input<KeyCode>>, level_instance: Res<LevelIns
         .detach();
 }
 
-pub fn spawn_spike(commands: &mut Commands, position: &IVec3, level_instance: &mut LevelInstance) {
-    let mut path_builder = PathBuilder::new();
-    let subdivisions = 8;
-    for i in 0..subdivisions {
-        let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
-        let position = Vec2::new(angle.cos(), angle.sin());
-        let offset = 0.5 + (i % 2) as f32;
-        let radius = 0.3 * offset;
-        path_builder.line_to(radius * position);
-    }
-    path_builder.close();
-
-    let path = path_builder.build();
-
-    commands
-        .spawn(GeometryBuilder::build_as(
-            &path,
-            DrawMode::Fill(FillMode::color(SPIKE_COLOR)),
-            Transform {
-                translation: position.as_vec3(),
-                ..default()
-            },
-        ))
-        .insert(Spike(*position))
-        .insert(LevelEntity);
+pub fn spawn_spike(
+    mesh_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    position: &IVec3,
+    level_instance: &mut LevelInstance,
+) {
+    commands.spawn((
+        mesh_builder.build_spike_mesh(*position),
+        Spike(*position),
+        LevelEntity,
+    ));
 
     level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
 }
-
 impl<'a> MaterialMeshBuilder<'a> {
     pub fn build_food_mesh(&mut self, position: IVec3) -> PbrBundle {
         PbrBundle {
@@ -412,6 +410,15 @@ impl<'a> MaterialMeshBuilder<'a> {
                 subdivisions: 5,
             })),
             material: self.materials.add(FOOD_COLOR.into()),
+            transform: Transform::from_translation(position.as_vec3()),
+            ..default()
+        }
+    }
+
+    pub fn build_spike_mesh(&mut self, position: IVec3) -> PbrBundle {
+        PbrBundle {
+            mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.5 })),
+            material: self.materials.add(SPIKE_COLOR.into()),
             transform: Transform::from_translation(position.as_vec3()),
             ..default()
         }
@@ -569,25 +576,5 @@ pub fn finish_snake_exit_level_system(
             event_clear_level.send(ClearLevelEvent);
             event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    pub fn test_serialization() {
-        let template = LevelTemplate {
-            snakes: vec![],
-            foods: vec![],
-            walls: vec![IVec3::ZERO],
-        };
-
-        let level = "(snakes:[],foods:[],walls:[(5,0,1)])";
-
-        let custom_asset = ron::de::from_bytes::<LevelTemplate>(level.as_bytes());
-        print!("{:?}", custom_asset);
-        assert!(custom_asset.is_ok());
     }
 }

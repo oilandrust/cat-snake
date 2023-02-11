@@ -527,26 +527,31 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
+    goal_query: Query<&Goal, With<Active>>,
 ) {
+    let Ok(goal) = goal_query.get_single() else {
+        return;
+    };
+
     for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
         for &child in children {
             let Ok((entity, part, modifier)) = snake_part_query.get_mut(child) else {
                 continue;
             };
 
-            // if modifier.is_some() {
-            //     if (snake.parts()[part.part_index].0 - level.goal_position)
-            //         .abs()
-            //         .max_element()
-            //         > 1
-            //     {
-            //         event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
-            //     }
-            // } else if snake.parts()[part.part_index].0 == level.goal_position {
-            //     commands.entity(entity).insert(PartClipper {
-            //         clip_position: level.goal_position,
-            //     });
-            // }
+            if modifier.is_some() {
+                if (snake.parts()[part.part_index].0 - goal.0)
+                    .abs()
+                    .max_element()
+                    > 1
+                {
+                    event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
+                }
+            } else if snake.parts()[part.part_index].0 == goal.0 {
+                commands.entity(entity).insert(PartClipper {
+                    clip_position: goal.0,
+                });
+            }
         }
 
         if move_command.is_some() {
