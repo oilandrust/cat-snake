@@ -262,8 +262,6 @@ pub fn update_snake_transforms_system(
         });
 
         transform.translation = snake.head_position().as_vec3() + fall_offset + push_offset;
-
-        //transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Y));
     }
 
     for (snake, _, children, move_command, _, _) in &mut snake_query {

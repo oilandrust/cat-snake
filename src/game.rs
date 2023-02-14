@@ -130,15 +130,22 @@ pub fn run(app: &mut App, args: &Args) {
 
     app.insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Msaa { samples: 4 })
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                title: "Bird Snake".to_string(),
-                width: 1080.0,
-                height: 720.0,
-                ..default()
-            },
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        title: "Bird Snake".to_string(),
+                        width: 1080.0,
+                        height: 720.0,
+                        ..default()
+                    },
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    watch_for_changes: true,
+                    ..Default::default()
+                }),
+        )
         .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
         .add_plugin(MenuPlugin)
         .add_plugin(MainMenuPlugin)

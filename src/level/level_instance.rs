@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{prelude::*, render::primitives::Aabb, utils::HashMap};
 
-use crate::gameplay::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent};
+use crate::{
+    gameplay::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent},
+    utils::ray_intersects_aabb,
+};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityType {
@@ -198,4 +201,125 @@ impl LevelInstance {
 
         distance
     }
+
+    pub fn find_first_free_cell_on_ray(&self, ray: Ray) -> Option<IVec3> {
+        let aabb = self.compute_bounds();
+
+        let Some(intersection) = ray_intersects_aabb(ray, &aabb, &Mat4::IDENTITY) else {
+            return None;
+        };
+
+        let intersection_0 = (ray.origin + intersection[0] * ray.direction)
+            .round()
+            .as_ivec3();
+        let intersection_1 = (ray.origin + intersection[1] * ray.direction)
+            .round()
+            .as_ivec3();
+
+        let cells_on_ray = bresenham_3d(
+            intersection_0.x,
+            intersection_0.y,
+            intersection_0.z,
+            intersection_1.x,
+            intersection_1.y,
+            intersection_1.z,
+        );
+
+        let first_non_enpty_cell = cells_on_ray
+            .iter()
+            .position(|position| !self.is_empty(*position));
+
+        first_non_enpty_cell.map(|index| cells_on_ray[index - 1])
+    }
+
+    pub fn compute_bounds(&self) -> Aabb {
+        let mut min = 1000 * IVec3::ONE;
+        let mut max = 1000 * IVec3::NEG_ONE;
+
+        self.occupied_cells.iter().for_each(|(position, _)| {
+            min = min.min(*position);
+            max = max.max(*position);
+        });
+
+        Aabb::from_min_max(min.as_vec3() - Vec3::ONE, max.as_vec3() + Vec3::ONE)
+    }
+}
+
+fn bresenham_3d(x1: i32, y1: i32, z1: i32, x2: i32, y2: i32, z2: i32) -> Vec<IVec3> {
+    let mut points = vec![];
+
+    let mut point = IVec3::new(x1, y1, z1);
+
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let dz = z2 - z1;
+
+    let x_inc = if dx < 0 { -1 } else { 1 };
+    let l = dx.abs();
+
+    let y_inc = if dy < 0 { -1 } else { 1 };
+    let m = dy.abs();
+
+    let z_inc = if dz < 0 { -1 } else { 1 };
+    let n = dz.abs();
+
+    let dx2 = l << 1;
+    let dy2 = m << 1;
+    let dz2 = n << 1;
+
+    if (l >= m) && (l >= n) {
+        let mut err_1 = dy2 - l;
+        let mut err_2 = dz2 - l;
+        for _ in 0..l {
+            points.push(point);
+            if err_1 > 0 {
+                point.y += y_inc;
+                err_1 -= dx2;
+            }
+            if err_2 > 0 {
+                point.z += z_inc;
+                err_2 -= dx2;
+            }
+            err_1 += dy2;
+            err_2 += dz2;
+            point.x += x_inc;
+        }
+    } else if (m >= l) && (m >= n) {
+        let mut err_1 = dx2 - m;
+        let mut err_2 = dz2 - m;
+        for _ in 0..m {
+            points.push(point);
+            if err_1 > 0 {
+                point.x += x_inc;
+                err_1 -= dy2;
+            }
+            if err_2 > 0 {
+                point.z += z_inc;
+                err_2 -= dy2;
+            }
+            err_1 += dx2;
+            err_2 += dz2;
+            point.y += y_inc;
+        }
+    } else {
+        let mut err_1 = dy2 - n;
+        let mut err_2 = dx2 - n;
+        for _ in 0..n {
+            points.push(point);
+            if err_1 > 0 {
+                point.y += y_inc;
+                err_1 -= dz2;
+            }
+            if err_2 > 0 {
+                point.x += x_inc;
+                err_2 -= dz2;
+            }
+            err_1 += dy2;
+            err_2 += dx2;
+            point.z += z_inc;
+        }
+    }
+
+    points.push(IVec3::new(x2, y2, z2));
+    points
 }

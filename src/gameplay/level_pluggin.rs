@@ -296,38 +296,28 @@ pub fn spawn_level_entities_system(
                 },
                 ..default()
             },
-            transform: Transform::from_translation(Vec3::new(0.5, 1.0, 0.5))
+            transform: Transform::from_translation(Vec3::new(0.5, 3.0, 0.5))
                 .looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
         LevelEntity,
     ));
 
-    // Spawn the wall blocks
-    let ground_material = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.8, 0.7, 0.6),
-        base_color_texture: Some(assets.outline_texture.clone()),
-        ..default()
-    });
-
-    for position in &level_template.walls {
-        commands.spawn((
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-                material: ground_material.clone(),
-                transform: Transform::from_translation(position.as_vec3()),
-                ..default()
-            },
-            LevelEntity,
-        ));
-
-        level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
-    }
-
     let mut mesh_builder = MaterialMeshBuilder {
         meshes: meshes.as_mut(),
         materials: materials.as_mut(),
     };
+
+    // Spawn the wall blocks
+    for position in &level_template.walls {
+        spawn_wall(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+            assets.as_ref(),
+        );
+    }
 
     // Spawn the food sprites.
     for position in &level_template.foods {
@@ -364,6 +354,7 @@ pub fn spawn_spike(
 
     level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
 }
+
 impl<'a> MaterialMeshBuilder<'a> {
     pub fn build_food_mesh(&mut self, position: IVec3) -> PbrBundle {
         PbrBundle {
@@ -385,6 +376,34 @@ impl<'a> MaterialMeshBuilder<'a> {
             ..default()
         }
     }
+}
+
+pub fn spawn_wall(
+    mesh_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    position: &IVec3,
+    level_instance: &mut LevelInstance,
+    assets: &GameAssets,
+) {
+    let ground_material = mesh_builder.materials.add(StandardMaterial {
+        base_color: Color::rgb(0.8, 0.7, 0.6),
+        base_color_texture: Some(assets.outline_texture.clone()),
+        ..default()
+    });
+
+    commands.spawn((
+        PbrBundle {
+            mesh: mesh_builder
+                .meshes
+                .add(Mesh::from(shape::Cube { size: 1.0 })),
+            material: ground_material,
+            transform: Transform::from_translation(position.as_vec3()),
+            ..default()
+        },
+        LevelEntity,
+    ));
+
+    level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
 }
 
 pub fn spawn_food(

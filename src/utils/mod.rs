@@ -4,7 +4,7 @@ pub fn ray_from_screen_space(
     cursor_pos_screen: Vec2,
     camera: &Camera,
     camera_transform: &GlobalTransform,
-) -> (Vec3, Vec3) {
+) -> Ray {
     let view = camera_transform.compute_matrix();
 
     let (viewport_min, viewport_max) = camera.logical_viewport_rect().unwrap();
@@ -22,17 +22,16 @@ pub fn ray_from_screen_space(
     let far = ndc_to_world.project_point3(cursor_ndc.extend(far_ndc));
     let ray_direction = far - near;
 
-    (near, ray_direction)
+    Ray {
+        origin: near,
+        direction: ray_direction,
+    }
 }
 
-pub fn ray_intersects_aabb(
-    ray: (Vec3, Vec3),
-    aabb: &Aabb,
-    model_to_world: &Mat4,
-) -> Option<[f32; 2]> {
+pub fn ray_intersects_aabb(ray: Ray, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]> {
     let world_to_model = model_to_world.inverse();
-    let ray_dir: Vec3A = world_to_model.transform_vector3(ray.1).into();
-    let ray_origin: Vec3A = world_to_model.transform_point3(ray.0).into();
+    let ray_dir: Vec3A = world_to_model.transform_vector3(ray.direction).into();
+    let ray_origin: Vec3A = world_to_model.transform_point3(ray.origin).into();
 
     let t_0: Vec3A = (aabb.min() - ray_origin) / ray_dir;
     let t_1: Vec3A = (aabb.max() - ray_origin) / ray_dir;

@@ -1,6 +1,7 @@
 use std::{fs::File, io::Write};
 
 use bevy::{prelude::*, tasks::IoTaskPool};
+use bevy_prototype_debug_lines::DebugLines;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -12,16 +13,20 @@ use crate::{
     gameplay::{
         camera_plugin::{camera_pan_system, camera_zoom_scroll_system},
         level_pluggin::{
-            clear_level_runtime_resources_system, spawn_level_entities_system,
+            clear_level_runtime_resources_system, spawn_level_entities_system, spawn_wall,
             CurrentLevelResourcePath, LevelEntity, LevelLoadedEvent, LevelTemplate, LoadingLevel,
         },
         snake_pluggin::{
-            spawn_snake_system, update_snake_transforms_system, Snake, SpawnSnakeEvent,
+            spawn_snake_system, update_snake_transforms_system, MaterialMeshBuilder, Snake,
+            SpawnSnakeEvent,
         },
     },
     level::level_instance::{LevelEntityType, LevelInstance},
-    GameState,
+    utils::ray_from_screen_space,
+    GameAssets, GameState,
 };
+
+use super::dev_tools_pluggin::draw_cross;
 
 pub struct EditorPlugin;
 
@@ -88,12 +93,48 @@ fn stop_editor_system(
         return;
     }
 
-    let template: Handle<LevelTemplate> = asset_server.load(&current_level_asset_path.0);
-    commands.insert_resource(LoadingLevel(template));
+    commands.insert_resource(LoadingLevel(asset_server.load(&current_level_asset_path.0)));
     commands.insert_resource(NextState(GameState::Game));
 }
 
-fn add_wall_on_click_system() {}
+#[allow(clippy::too_many_arguments)]
+fn add_wall_on_click_system(
+    buttons: Res<Input<MouseButton>>,
+    windows: Res<Windows>,
+    mut commands: Commands,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    mut level_instance: ResMut<LevelInstance>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    assets: Res<GameAssets>,
+) {
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    let window = windows.get_primary().unwrap();
+    let Some(mouse_position) = window.cursor_position() else {
+        return;
+    };
+
+    let (camera, camera_transform) = camera.single();
+    let ray = ray_from_screen_space(mouse_position, camera, camera_transform);
+
+    let mut mesh_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
+
+    if let Some(position) = level_instance.find_first_free_cell_on_ray(ray) {
+        spawn_wall(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+            assets.as_ref(),
+        );
+    }
+}
 
 fn save_level_system(
     keyboard: Res<Input<KeyCode>>,
