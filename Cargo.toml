@@ -41,6 +41,7 @@ iyes_loopless = "0.9"
 rand = "0.8.5"
 ron = "0.8"
 serde = "1.0.152"
+bevy_mod_raycast = "0.7.0"
 
 # Wasm Dependenccies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

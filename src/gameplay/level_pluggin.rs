@@ -18,6 +18,7 @@ use crate::{
     level::level_instance::{LevelEntityType, LevelInstance},
     level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
+    tools::picking::{PickableBundle, PickingCameraBundle},
     Assets, GameAssets, GameState,
 };
 
@@ -275,6 +276,7 @@ pub fn spawn_level_entities_system(
             ..default()
         },
         LevelEntity,
+        PickingCameraBundle::default(),
     ));
 
     // light
@@ -401,6 +403,7 @@ pub fn spawn_wall(
             ..default()
         },
         LevelEntity,
+        PickableBundle::default(),
     ));
 
     level_instance.mark_position_occupied(*position, LevelEntityType::Wall);

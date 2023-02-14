@@ -26,13 +26,17 @@ use crate::{
     GameAssets, GameState,
 };
 
-use super::dev_tools_pluggin::draw_cross;
+use super::{
+    dev_tools_pluggin::draw_cross,
+    picking::{DefaultPickingPlugins, Selection},
+};
 
 pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(start_editor_system.run_in_state(GameState::Game))
+        app.add_plugins(DefaultPickingPlugins)
+            .add_system(start_editor_system.run_in_state(GameState::Game))
             .add_system(stop_editor_system.run_in_state(GameState::Editor))
             .add_enter_system(GameState::Editor, init_level_instance_system)
             .add_exit_system(GameState::Editor, despawn_with::<LevelEntity>)
@@ -49,6 +53,7 @@ impl Plugin for EditorPlugin {
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
                     .with_system(add_wall_on_click_system)
+                    .with_system(delete_selected_wall_system)
                     .with_system(save_level_system)
                     .with_system(update_snake_transforms_system)
                     .into(),
@@ -100,6 +105,7 @@ fn stop_editor_system(
 #[allow(clippy::too_many_arguments)]
 fn add_wall_on_click_system(
     buttons: Res<Input<MouseButton>>,
+    keyboard: Res<Input<KeyCode>>,
     windows: Res<Windows>,
     mut commands: Commands,
     camera: Query<(&Camera, &GlobalTransform)>,
@@ -108,7 +114,7 @@ fn add_wall_on_click_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     assets: Res<GameAssets>,
 ) {
-    if !buttons.just_pressed(MouseButton::Left) {
+    if !keyboard.pressed(KeyCode::LControl) || !buttons.just_pressed(MouseButton::Left) {
         return;
     }
 
@@ -133,6 +139,24 @@ fn add_wall_on_click_system(
             &mut level_instance,
             assets.as_ref(),
         );
+    }
+}
+
+fn delete_selected_wall_system(
+    mut commands: Commands,
+    keyboard: Res<Input<KeyCode>>,
+    selection: Query<(Entity, &Selection)>,
+) {
+    if !keyboard.just_pressed(KeyCode::Back) {
+        return;
+    }
+
+    for (entity, selection) in &selection {
+        if !selection.selected() {
+            continue;
+        }
+
+        commands.entity(entity).despawn();
     }
 }
 
