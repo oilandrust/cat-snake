@@ -51,6 +51,10 @@ impl LevelInstance {
         )
     }
 
+    pub fn get(&self, position: IVec3) -> Option<&LevelEntityType> {
+        self.occupied_cells.get(&position)
+    }
+
     pub fn is_spike(&self, position: IVec3) -> bool {
         matches!(
             self.occupied_cells.get(&position),
@@ -87,11 +91,6 @@ impl LevelInstance {
         updates.push(LevelEntityUpdateEvent::FillPosition(new_position));
 
         updates
-    }
-
-    pub fn move_entity(&mut self, old_position: IVec3, new_position: IVec3) {
-        let old_value = self.set_empty(old_position);
-        self.mark_position_occupied(new_position, old_value.unwrap());
     }
 
     /// Move a snake by an offset:
@@ -226,6 +225,20 @@ impl LevelInstance {
         let ray_start = ray.origin + ray.direction * t_min;
         let ray_end = ray.origin + ray.direction * t_max;
 
+        shapes
+            .cuboid()
+            .position(ray_start)
+            .size(0.2 * Vec3::ONE)
+            .duration(5.0)
+            .color(Color::RED);
+
+        shapes
+            .cuboid()
+            .position(ray_end)
+            .size(0.2 * Vec3::ONE)
+            .duration(5.0)
+            .color(Color::RED);
+
         let sign = |x| {
             if x > 0.0 {
                 1
@@ -235,18 +248,18 @@ impl LevelInstance {
                 0
             }
         };
-        let frac_1 = |x: f32| 1.0 - x - x.floor();
+        let frac_1 = |x: f32| 1.0 - x + x.floor();
 
         let mut t_max_x;
         let mut t_max_y;
         let mut t_max_z;
 
-        let x1 = ray_start.x;
-        let y1 = ray_start.y;
-        let z1 = ray_start.z;
-        let x2 = ray_end.x;
-        let y2 = ray_end.y;
-        let z2 = ray_end.z;
+        let x1 = ray_start.x + 0.5;
+        let y1 = ray_start.y + 0.5;
+        let z1 = ray_start.z + 0.5;
+        let x2 = ray_end.x + 0.5;
+        let y2 = ray_end.y + 0.5;
+        let z2 = ray_end.z + 0.5;
 
         let dx = sign(x2 - x1);
         let t_delta_x = if dx != 0 {
@@ -284,13 +297,19 @@ impl LevelInstance {
             t_max_z = t_delta_z * z1.fract()
         }
 
-        let start_position = ray_start.as_ivec3();
+        let start_position = Vec3::new(x1 - 0.5, y1 - 0.5, z1 - 0.5).round().as_ivec3();
         let mut current_position = start_position;
         let mut prev_position = current_position;
         println!("========");
         println!("Start: {:?}", start_position);
 
         loop {
+            shapes
+                .cuboid()
+                .position(current_position.as_vec3())
+                .size(Vec3::ONE)
+                .duration(5.0);
+
             if t_max_x < t_max_y {
                 if t_max_x < t_max_z {
                     current_position.x += dx;
@@ -311,11 +330,6 @@ impl LevelInstance {
             }
 
             // process voxel here
-            shapes
-                .cuboid()
-                .position(current_position.as_vec3())
-                .size(Vec3::ONE)
-                .duration(5.0);
 
             if !self.is_empty(current_position) {
                 println!(

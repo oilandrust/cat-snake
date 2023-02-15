@@ -174,17 +174,38 @@ fn add_wall_on_click_system(
 
 fn move_selected_grid_entity(
     keyboard: Res<Input<KeyCode>>,
+    mouse_input: Res<Input<MouseButton>>,
     mut level_instance: ResMut<LevelInstance>,
     mut selection: Query<(&Selection, &mut GridEntity, &mut Transform)>,
+    camera: Query<&GlobalTransform, With<EditorCamera>>,
 ) {
+    if mouse_input.pressed(MouseButton::Right) {
+        return;
+    }
+
+    let camera_transform = camera.single();
+    let right = camera_transform.right();
+
+    let horizonthal_directions = [Vec3::NEG_X, Vec3::X, Vec3::NEG_Z, Vec3::Z];
+    let mut x_axis = horizonthal_directions[0];
+
+    for direction in horizonthal_directions.iter().skip(1) {
+        if x_axis.dot(right) < direction.dot(right) {
+            x_axis = *direction;
+        }
+    }
+
+    let x_axis = x_axis.as_ivec3();
+    let z_axis = IVec3::new(-x_axis.z, 0, x_axis.x);
+
     let move_direction = if keyboard.just_pressed(KeyCode::W) {
-        Some(IVec3::NEG_Z)
+        Some(-z_axis)
     } else if keyboard.just_pressed(KeyCode::A) {
-        Some(IVec3::NEG_X)
+        Some(-x_axis)
     } else if keyboard.just_pressed(KeyCode::S) {
-        Some(IVec3::Z)
+        Some(z_axis)
     } else if keyboard.just_pressed(KeyCode::D) {
-        Some(IVec3::X)
+        Some(x_axis)
     } else if keyboard.just_pressed(KeyCode::Q) {
         Some(IVec3::NEG_Y)
     } else if keyboard.just_pressed(KeyCode::E) {
@@ -197,14 +218,28 @@ fn move_selected_grid_entity(
         return;
     };
 
+    let mut moves = Vec::with_capacity(selection.iter().len());
+
     for (selection, mut grid_entity, mut transform) in &mut selection {
         if !selection.selected() {
             continue;
         }
 
-        level_instance.move_entity(grid_entity.0, grid_entity.0 + direction);
+        moves.push((
+            grid_entity.0,
+            grid_entity.0 + direction,
+            *level_instance.get(grid_entity.0).unwrap(),
+        ));
+
         grid_entity.0 += direction;
         transform.translation += direction.as_vec3();
+    }
+
+    for (old, _, _) in &moves {
+        level_instance.set_empty(*old);
+    }
+    for (_, new, value) in moves {
+        level_instance.mark_position_occupied(new, value);
     }
 }
 
