@@ -15,9 +15,7 @@ pub use self::{
 };
 pub use bevy_mod_raycast::{Primitive3d, RaycastMesh, RaycastSource};
 
-use bevy::{
-    app::PluginGroupBuilder, asset::Asset, ecs::schedule::ShouldRun, prelude::*, ui::FocusPolicy,
-};
+use bevy::{app::PluginGroupBuilder, asset::Asset, prelude::*, ui::FocusPolicy};
 use highlight::{get_initial_mesh_highlight_asset, Highlight};
 use iyes_loopless::prelude::IntoConditionalSystem;
 
@@ -60,14 +58,6 @@ impl Default for PickingPluginsState {
             enable_highlighting: true,
             enable_interacting: true,
         }
-    }
-}
-
-fn simple_criteria(flag: bool) -> ShouldRun {
-    if flag {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
     }
 }
 

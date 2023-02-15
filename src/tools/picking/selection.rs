@@ -16,10 +16,6 @@ impl Selection {
     pub fn selected(&self) -> bool {
         self.selected
     }
-    /// Set the selection state.
-    pub fn set_selected(&mut self, selected: bool) {
-        self.selected = selected;
-    }
 }
 
 /// Marker struct used to mark pickable entities for which you don't want to trigger a deselection event when picked. This is useful for gizmos or other pickable UI entities.

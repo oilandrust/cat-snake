@@ -226,112 +226,96 @@ impl LevelInstance {
         let ray_start = ray.origin + ray.direction * t_min;
         let ray_end = ray.origin + ray.direction * t_max;
 
-        let round_to_grid_center = |value| {
-            if value < 0.0 {
-                (value + 0.5) as i32
+        let sign = |x| {
+            if x > 0.0 {
+                1
+            } else if x < 0.0 {
+                -1
             } else {
-                (value - 0.5) as i32
+                0
             }
         };
+        let frac_1 = |x: f32| 1.0 - x - x.floor();
 
-        let mut current_x_index = round_to_grid_center(ray_start.x);
-        let end_x_index = round_to_grid_center(ray_end.x);
-        let step_x;
-        let t_delta_x;
         let mut t_max_x;
-        if ray.direction.x > 0.0 {
-            step_x = 1;
-            t_delta_x = 1.0 / ray.direction.x;
-            t_max_x = t_min + (current_x_index as f32 - ray_start.x) / ray.direction.x;
-        } else if ray.direction.x < 0.0 {
-            step_x = -1;
-            t_delta_x = 1.0 / -ray.direction.x;
-            let previous_x_index = current_x_index - 1;
-            t_max_x = t_min + (previous_x_index as f32 - ray_start.x) / ray.direction.x;
-        } else {
-            step_x = 0;
-            t_delta_x = t_max;
-            t_max_x = t_max;
-        }
-
-        let mut current_y_index = round_to_grid_center(ray_start.y);
-        let end_y_index = round_to_grid_center(ray_end.y);
-        let step_y;
-        let t_delta_y;
         let mut t_max_y;
-        if ray.direction.y > 0.0 {
-            step_y = 1;
-            t_delta_y = 1.0 / ray.direction.y;
-            t_max_y = t_min + (current_y_index as f32 - ray_start.y) / ray.direction.y;
-        } else if ray.direction.y < 0.0 {
-            step_y = -1;
-            t_delta_y = 1.0 / -ray.direction.y;
-            let previous_y_index = current_y_index - 1;
-            t_max_y = t_min + (previous_y_index as f32 - ray_start.y) / ray.direction.y;
-        } else {
-            step_y = 0;
-            t_delta_y = t_max;
-            t_max_y = t_max;
-        }
-
-        let mut current_z_index = round_to_grid_center(ray_start.z);
-        let end_z_index = round_to_grid_center(ray_end.z);
-        let step_z;
-        let t_delta_z;
         let mut t_max_z;
-        if ray.direction.z > 0.0 {
-            step_z = 1;
-            t_delta_z = 1.0 / ray.direction.z;
-            t_max_z = t_min + (current_z_index as f32 - ray_start.z) / ray.direction.z;
-        } else if ray.direction.z < 0.0 {
-            step_z = -1;
-            t_delta_z = 1.0 / -ray.direction.z;
-            let previous_z_index = current_z_index - 1;
-            t_max_z = t_min + (previous_z_index as f32 - ray_start.z) / ray.direction.z;
+
+        let x1 = ray_start.x;
+        let y1 = ray_start.y;
+        let z1 = ray_start.z;
+        let x2 = ray_end.x;
+        let y2 = ray_end.y;
+        let z2 = ray_end.z;
+
+        let dx = sign(x2 - x1);
+        let t_delta_x = if dx != 0 {
+            10000000.0f32.min((dx as f32) / (x2 - x1))
         } else {
-            step_z = 0;
-            t_delta_z = t_max;
-            t_max_z = t_max;
+            10000000.0
+        };
+        if dx > 0 {
+            t_max_x = t_delta_x * frac_1(x1);
+        } else {
+            t_max_x = t_delta_x * x1.fract()
         }
 
-        let start_position = IVec3::new(current_x_index, current_y_index, current_z_index);
-        let mut prev_position = start_position;
+        let dy = sign(y2 - y1);
+        let t_delta_y = if dy != 0 {
+            10000000.0f32.min((dy as f32) / (y2 - y1))
+        } else {
+            10000000.0
+        };
+        if dy > 0 {
+            t_max_y = t_delta_y * frac_1(y1);
+        } else {
+            t_max_y = t_delta_y * y1.fract()
+        }
+
+        let dz = sign(z2 - z1);
+        let t_delta_z = if dz != 0 {
+            10000000.0f32.min((dz as f32) / (z2 - z1))
+        } else {
+            10000000.0
+        };
+        if dz > 0 {
+            t_max_z = t_delta_z * frac_1(z1);
+        } else {
+            t_max_z = t_delta_z * z1.fract()
+        }
+
+        let start_position = ray_start.as_ivec3();
         let mut current_position = start_position;
-        let end_position = IVec3::new(end_x_index, end_y_index, end_z_index);
-        //Some(prev_position)
-
-        let mut count = 0;
-
+        let mut prev_position = current_position;
         println!("========");
-        println!("Start: {:?}, End: {:?}", start_position, end_position);
+        println!("Start: {:?}", start_position);
 
-        while current_position != end_position {
-            println!("{:?}", current_position);
+        loop {
+            if t_max_x < t_max_y {
+                if t_max_x < t_max_z {
+                    current_position.x += dx;
+                    t_max_x += t_delta_x;
+                } else {
+                    current_position.z += dz;
+                    t_max_z += t_delta_z;
+                }
+            } else if t_max_y < t_max_z {
+                current_position.y += dy;
+                t_max_y += t_delta_y;
+            } else {
+                current_position.z += dz;
+                t_max_z += t_delta_z;
+            }
+            if t_max_x > 1.0 && t_max_y > 1.0 && t_max_z > 1.0 {
+                break;
+            }
 
+            // process voxel here
             shapes
                 .cuboid()
                 .position(current_position.as_vec3())
                 .size(Vec3::ONE)
                 .duration(5.0);
-
-            if t_max_x < t_max_y && t_max_x < t_max_z {
-                // X-axis traversal.
-                current_position.x += step_x;
-                t_max_x += t_delta_x;
-            } else if t_max_y < t_max_z {
-                // Y-axis traversal.
-                current_position.y += step_y;
-                t_max_y += t_delta_y;
-            } else {
-                // Z-axis traversal.
-                current_position.z += step_z;
-                t_max_z += t_delta_z;
-            }
-
-            count += 1;
-            if count > 16 {
-                return None;
-            }
 
             if !self.is_empty(current_position) {
                 println!(
@@ -361,83 +345,4 @@ impl LevelInstance {
             max.as_vec3() + 0.5 * Vec3::ONE,
         )
     }
-}
-
-fn bresenham_3d(x1: i32, y1: i32, z1: i32, x2: i32, y2: i32, z2: i32) -> Vec<IVec3> {
-    let mut points = vec![];
-
-    let mut point = IVec3::new(x1, y1, z1);
-
-    let dx = x2 - x1;
-    let dy = y2 - y1;
-    let dz = z2 - z1;
-
-    let x_inc = if dx < 0 { -1 } else { 1 };
-    let l = dx.abs();
-
-    let y_inc = if dy < 0 { -1 } else { 1 };
-    let m = dy.abs();
-
-    let z_inc = if dz < 0 { -1 } else { 1 };
-    let n = dz.abs();
-
-    let dx2 = l << 1;
-    let dy2 = m << 1;
-    let dz2 = n << 1;
-
-    if (l >= m) && (l >= n) {
-        let mut err_1 = dy2 - l;
-        let mut err_2 = dz2 - l;
-        for _ in 0..l {
-            points.push(point);
-            if err_1 > 0 {
-                point.y += y_inc;
-                err_1 -= dx2;
-            }
-            if err_2 > 0 {
-                point.z += z_inc;
-                err_2 -= dx2;
-            }
-            err_1 += dy2;
-            err_2 += dz2;
-            point.x += x_inc;
-        }
-    } else if (m >= l) && (m >= n) {
-        let mut err_1 = dx2 - m;
-        let mut err_2 = dz2 - m;
-        for _ in 0..m {
-            points.push(point);
-            if err_1 > 0 {
-                point.x += x_inc;
-                err_1 -= dy2;
-            }
-            if err_2 > 0 {
-                point.z += z_inc;
-                err_2 -= dy2;
-            }
-            err_1 += dx2;
-            err_2 += dz2;
-            point.y += y_inc;
-        }
-    } else {
-        let mut err_1 = dy2 - n;
-        let mut err_2 = dx2 - n;
-        for _ in 0..n {
-            points.push(point);
-            if err_1 > 0 {
-                point.y += y_inc;
-                err_1 -= dz2;
-            }
-            if err_2 > 0 {
-                point.x += x_inc;
-                err_2 -= dz2;
-            }
-            err_1 += dy2;
-            err_2 += dx2;
-            point.z += z_inc;
-        }
-    }
-
-    points.push(IVec3::new(x2, y2, z2));
-    points
 }

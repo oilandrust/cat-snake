@@ -18,7 +18,7 @@ use crate::{
         level_template::{LevelTemplateLoader, LoadedLevel},
         test_levels::TEST_LEVELS,
     },
-    tools::picking::{PickableBundle, PickingCameraBundle},
+    tools::picking::PickableBundle,
     Assets, GameAssets, GameState,
 };
 

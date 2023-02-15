@@ -1,10 +1,9 @@
-use bevy::math::Vec3A;
 use bevy::prelude::*;
-use bevy::render::primitives::Aabb;
+
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::bevy_inspector;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
-use bevy_prototype_debug_lines::DebugLines;
+
 use bevy_prototype_debug_lines::DebugLinesPlugin;
 use iyes_loopless::prelude::ConditionSet;
 

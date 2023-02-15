@@ -11,7 +11,6 @@ use ron::ser::PrettyConfig;
 use crate::{
     despawn_with,
     gameplay::{
-        camera_plugin::{camera_pan_system, camera_zoom_scroll_system},
         level_pluggin::{
             clear_level_runtime_resources_system, spawn_level_entities_system, spawn_wall,
             CurrentLevelResourcePath, Food, GridEntity, LevelEntity, LevelLoadedEvent, Spike, Wall,
