@@ -52,6 +52,10 @@ pub fn mesh_selection(
         }
     }
 
+    if keyboard_input.pressed(KeyCode::LControl) {
+        return;
+    }
+
     if keyboard_input.pressed(KeyCode::LWin) && keyboard_input.pressed(KeyCode::A) {
         // The user has hit ctrl+a, select all the things!
         query_all.for_each_mut(|(mut selection, _)| {
@@ -64,20 +68,20 @@ pub fn mesh_selection(
         for (mut selection, interaction) in &mut query_all.iter_mut() {
             if selection.selected
                 && *interaction != Interaction::Clicked
-                && !keyboard_input.pressed(KeyCode::LControl)
+                && !keyboard_input.pressed(KeyCode::LShift)
             {
                 // In this case, the entity is currently marked as selected, but it was not clicked
                 // on (interaction), and lctrl was not being held, so it should be deselected.
                 selection.selected = false;
             } else if *interaction == Interaction::Clicked
-                && keyboard_input.pressed(KeyCode::LControl)
+                && keyboard_input.pressed(KeyCode::LShift)
             {
                 selection.selected = !selection.selected
             } else if !selection.selected && *interaction == Interaction::Clicked {
                 selection.selected = true;
             }
         }
-    } else if !keyboard_input.pressed(KeyCode::LControl) {
+    } else if !keyboard_input.pressed(KeyCode::LShift) {
         // This branch deselects everything if the user clicks, in empty space. Deselection is not
         // run if the UI or an item tagged with `NoDeselect` was clicked on.
         let mut ui_not_clicked = true;

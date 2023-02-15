@@ -1,11 +1,12 @@
 use crate::{
-    gameplay::level_pluggin::Food,
     gameplay::movement_pluggin::GravityFall,
     gameplay::snake_pluggin::Snake,
     gameplay::undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},
     level::level_instance::LevelInstance,
 };
 use bevy::prelude::*;
+
+use super::level_pluggin::GridEntity;
 
 /// Provides commands that implement the undoable game mechanics.
 /// Commands manage the state of the game data such as snakes, food, etc..
@@ -110,7 +111,7 @@ pub struct PlayerMoveCommand<'a> {
     history: &'a mut SnakeHistory,
     snake: &'a mut Snake,
     other_snake: Option<&'a mut Snake>,
-    food: Option<&'a Food>,
+    food: Option<&'a GridEntity>,
     direction: IVec3,
 }
 
@@ -120,7 +121,7 @@ impl<'a> PlayerMoveCommand<'a> {
         self
     }
 
-    pub fn eating_food(mut self, food: Option<&'a Food>) -> Self {
+    pub fn eating_food(mut self, food: Option<&'a GridEntity>) -> Self {
         self.food = food;
         self
     }

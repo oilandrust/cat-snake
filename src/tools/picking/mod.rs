@@ -19,7 +19,7 @@ use bevy::{
     app::PluginGroupBuilder, asset::Asset, ecs::schedule::ShouldRun, prelude::*, ui::FocusPolicy,
 };
 use highlight::{get_initial_mesh_highlight_asset, Highlight};
-use iyes_loopless::prelude::{ConditionSet, IntoConditionalSystem};
+use iyes_loopless::prelude::IntoConditionalSystem;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
 pub enum PickingSystem {

@@ -1,10 +1,4 @@
-use bevy::{
-    app::AppExit,
-    asset::{AssetLoader, LoadContext, LoadedAsset},
-    prelude::*,
-    reflect::TypeUuid,
-    utils::BoxedFuture,
-};
+use bevy::{app::AppExit, prelude::*};
 
 use iyes_loopless::prelude::{
     AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem,
@@ -16,8 +10,14 @@ use crate::{
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
     level::level_instance::{LevelEntityType, LevelInstance},
-    level::levels::LEVELS,
-    level::test_levels::TEST_LEVELS,
+    level::{
+        level_template::{LevelTemplate, LoadingLevel},
+        levels::LEVELS,
+    },
+    level::{
+        level_template::{LevelTemplateLoader, LoadedLevel},
+        test_levels::TEST_LEVELS,
+    },
     tools::picking::{PickableBundle, PickingCameraBundle},
     Assets, GameAssets, GameState,
 };
@@ -25,10 +25,8 @@ use crate::{
 use super::{
     game_constants_pluggin::{FOOD_COLOR, SPIKE_COLOR},
     movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
-    snake_pluggin::{MaterialMeshBuilder, SnakeTemplate},
+    snake_pluggin::MaterialMeshBuilder,
 };
-
-use serde::{Deserialize, Serialize};
 
 pub struct StartLevelEventWithIndex(pub usize);
 pub struct StartTestLevelEventWithIndex(pub usize);
@@ -40,13 +38,19 @@ pub struct ClearLevelEvent;
 pub struct LevelEntity;
 
 #[derive(Component, Clone, Copy)]
-pub struct Food(pub IVec3);
+pub struct GridEntity(pub IVec3);
 
 #[derive(Component, Clone, Copy)]
-pub struct Spike(pub IVec3);
+pub struct Wall;
 
 #[derive(Component, Clone, Copy)]
-pub struct Goal(pub IVec3);
+pub struct Food;
+
+#[derive(Component, Clone, Copy)]
+pub struct Spike;
+
+#[derive(Component, Clone, Copy)]
+pub struct Goal;
 
 #[derive(Resource)]
 pub struct CurrentLevelId(pub usize);
@@ -128,42 +132,6 @@ impl Plugin for LevelPluggin {
                 clear_level_system.run_in_state(GameState::Game),
             )
             .add_system(rotate_goal_system.run_in_state(GameState::Game));
-    }
-}
-
-#[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug)]
-#[uuid = "39cadc56-aa9c-4543-8640-a018b74b5052"]
-pub struct LevelTemplate {
-    pub snakes: Vec<SnakeTemplate>,
-    pub foods: Vec<IVec3>,
-    pub walls: Vec<IVec3>,
-    pub spikes: Vec<IVec3>,
-}
-
-#[derive(Resource)]
-pub struct LoadingLevel(pub Handle<LevelTemplate>);
-
-#[derive(Resource)]
-pub struct LoadedLevel(pub Handle<LevelTemplate>);
-
-#[derive(Default)]
-pub struct LevelTemplateLoader;
-
-impl AssetLoader for LevelTemplateLoader {
-    fn load<'a>(
-        &'a self,
-        bytes: &'a [u8],
-        load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<(), bevy::asset::Error>> {
-        Box::pin(async move {
-            let custom_asset = ron::de::from_bytes::<LevelTemplate>(bytes)?;
-            load_context.set_default_asset(LoadedAsset::new(custom_asset));
-            Ok(())
-        })
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["lvl"]
     }
 }
 
@@ -276,7 +244,6 @@ pub fn spawn_level_entities_system(
             ..default()
         },
         LevelEntity,
-        PickingCameraBundle::default(),
     ));
 
     // light
@@ -350,7 +317,8 @@ pub fn spawn_spike(
 ) {
     commands.spawn((
         mesh_builder.build_spike_mesh(*position),
-        Spike(*position),
+        GridEntity(*position),
+        Spike,
         LevelEntity,
     ));
 
@@ -403,6 +371,8 @@ pub fn spawn_wall(
             ..default()
         },
         LevelEntity,
+        GridEntity(*position),
+        Wall,
         PickableBundle::default(),
     ));
 
@@ -417,8 +387,10 @@ pub fn spawn_food(
 ) {
     commands.spawn((
         mesh_builder.build_food_mesh(*position),
-        Food(*position),
+        GridEntity(*position),
+        Food,
         LevelEntity,
+        PickableBundle::default(),
     ));
 
     level_instance.mark_position_occupied(*position, LevelEntityType::Food);
@@ -480,7 +452,7 @@ fn rotate_goal_system(
 pub fn check_for_level_completion_system(
     mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     snakes_query: Query<(Entity, &Snake), (With<Active>, Without<LevelExitAnim>)>,
-    goal_query: Query<&Goal, With<Active>>,
+    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
 ) {
     let Ok(goal) = goal_query.get_single() else {
         return;

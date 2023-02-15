@@ -1,4 +1,6 @@
+use bevy::math::Vec3A;
 use bevy::prelude::*;
+use bevy::render::primitives::Aabb;
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::bevy_inspector;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
@@ -84,20 +86,4 @@ fn inspector_ui_system(world: &mut World) {
             bevy_inspector::ui_for_world(world, ui);
         });
     });
-}
-
-pub fn draw_cross(lines: &mut DebugLines, position: Vec3, color: Color) {
-    lines.line_colored(
-        position + Vec3::new(0.5, 0.5, 0.0),
-        position + Vec3::new(-0.5, -0.5, 0.0),
-        0.,
-        color,
-    );
-
-    lines.line_colored(
-        position + Vec3::new(-0.5, 0.5, 0.0),
-        position + Vec3::new(0.5, -0.5, 0.0),
-        0.,
-        color,
-    );
 }

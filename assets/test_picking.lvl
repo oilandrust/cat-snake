@@ -1,0 +1,11 @@
+(
+    snakes: [
+    ],
+    foods: [
+    ],
+    walls: [
+        (0, 0, 0),
+    ],
+    spikes: [
+    ],
+)

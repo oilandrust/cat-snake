@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 
-use bevy::{prelude::*, render::primitives::Aabb, utils::HashMap};
+use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb, utils::HashMap};
 
 use crate::{
     gameplay::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent},
     utils::ray_intersects_aabb,
 };
+use bevy_prototype_debug_lines::DebugShapes;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityType {
@@ -25,10 +26,6 @@ impl LevelInstance {
         LevelInstance {
             occupied_cells: HashMap::new(),
         }
-    }
-
-    pub fn occupied_cells(&self) -> &HashMap<IVec3, LevelEntityType> {
-        &self.occupied_cells
     }
 
     pub fn is_empty(&self, position: IVec3) -> bool {
@@ -90,6 +87,11 @@ impl LevelInstance {
         updates.push(LevelEntityUpdateEvent::FillPosition(new_position));
 
         updates
+    }
+
+    pub fn move_entity(&mut self, old_position: IVec3, new_position: IVec3) {
+        let old_value = self.set_empty(old_position);
+        self.mark_position_occupied(new_position, old_value.unwrap());
     }
 
     /// Move a snake by an offset:
@@ -202,34 +204,147 @@ impl LevelInstance {
         distance
     }
 
-    pub fn find_first_free_cell_on_ray(&self, ray: Ray) -> Option<IVec3> {
+    pub fn find_first_free_cell_on_ray(&self, ray: Ray, shapes: &mut DebugShapes) -> Option<IVec3> {
         let aabb = self.compute_bounds();
 
-        let Some(intersection) = ray_intersects_aabb(ray, &aabb, &Mat4::IDENTITY) else {
+        // we extend the bounds by one unit so that there will always be a empty cell before the first non empty cell.
+        // In the case where the start ray is outside of the bounds of course, TODO: check if this is not the case.
+        let bound_min: Vec3 = (aabb.min() - Vec3A::ONE).into();
+        let bound_max: Vec3 = (aabb.max() + Vec3A::ONE).into();
+
+        shapes
+            .cuboid()
+            .position(aabb.center.into())
+            .size(bound_max - bound_min)
+            .duration(5.0)
+            .color(Color::GREEN);
+
+        let Some([t_min, t_max]) = ray_intersects_aabb(ray, &Aabb::from_min_max(bound_min, bound_max), &Mat4::IDENTITY) else {
             return None;
         };
 
-        let intersection_0 = (ray.origin + intersection[0] * ray.direction)
-            .round()
-            .as_ivec3();
-        let intersection_1 = (ray.origin + intersection[1] * ray.direction)
-            .round()
-            .as_ivec3();
+        let ray_start = ray.origin + ray.direction * t_min;
+        let ray_end = ray.origin + ray.direction * t_max;
 
-        let cells_on_ray = bresenham_3d(
-            intersection_0.x,
-            intersection_0.y,
-            intersection_0.z,
-            intersection_1.x,
-            intersection_1.y,
-            intersection_1.z,
-        );
+        let round_to_grid_center = |value| {
+            if value < 0.0 {
+                (value + 0.5) as i32
+            } else {
+                (value - 0.5) as i32
+            }
+        };
 
-        let first_non_enpty_cell = cells_on_ray
-            .iter()
-            .position(|position| !self.is_empty(*position));
+        let mut current_x_index = round_to_grid_center(ray_start.x);
+        let end_x_index = round_to_grid_center(ray_end.x);
+        let step_x;
+        let t_delta_x;
+        let mut t_max_x;
+        if ray.direction.x > 0.0 {
+            step_x = 1;
+            t_delta_x = 1.0 / ray.direction.x;
+            t_max_x = t_min + (current_x_index as f32 - ray_start.x) / ray.direction.x;
+        } else if ray.direction.x < 0.0 {
+            step_x = -1;
+            t_delta_x = 1.0 / -ray.direction.x;
+            let previous_x_index = current_x_index - 1;
+            t_max_x = t_min + (previous_x_index as f32 - ray_start.x) / ray.direction.x;
+        } else {
+            step_x = 0;
+            t_delta_x = t_max;
+            t_max_x = t_max;
+        }
 
-        first_non_enpty_cell.map(|index| cells_on_ray[index - 1])
+        let mut current_y_index = round_to_grid_center(ray_start.y);
+        let end_y_index = round_to_grid_center(ray_end.y);
+        let step_y;
+        let t_delta_y;
+        let mut t_max_y;
+        if ray.direction.y > 0.0 {
+            step_y = 1;
+            t_delta_y = 1.0 / ray.direction.y;
+            t_max_y = t_min + (current_y_index as f32 - ray_start.y) / ray.direction.y;
+        } else if ray.direction.y < 0.0 {
+            step_y = -1;
+            t_delta_y = 1.0 / -ray.direction.y;
+            let previous_y_index = current_y_index - 1;
+            t_max_y = t_min + (previous_y_index as f32 - ray_start.y) / ray.direction.y;
+        } else {
+            step_y = 0;
+            t_delta_y = t_max;
+            t_max_y = t_max;
+        }
+
+        let mut current_z_index = round_to_grid_center(ray_start.z);
+        let end_z_index = round_to_grid_center(ray_end.z);
+        let step_z;
+        let t_delta_z;
+        let mut t_max_z;
+        if ray.direction.z > 0.0 {
+            step_z = 1;
+            t_delta_z = 1.0 / ray.direction.z;
+            t_max_z = t_min + (current_z_index as f32 - ray_start.z) / ray.direction.z;
+        } else if ray.direction.z < 0.0 {
+            step_z = -1;
+            t_delta_z = 1.0 / -ray.direction.z;
+            let previous_z_index = current_z_index - 1;
+            t_max_z = t_min + (previous_z_index as f32 - ray_start.z) / ray.direction.z;
+        } else {
+            step_z = 0;
+            t_delta_z = t_max;
+            t_max_z = t_max;
+        }
+
+        let start_position = IVec3::new(current_x_index, current_y_index, current_z_index);
+        let mut prev_position = start_position;
+        let mut current_position = start_position;
+        let end_position = IVec3::new(end_x_index, end_y_index, end_z_index);
+        //Some(prev_position)
+
+        let mut count = 0;
+
+        println!("========");
+        println!("Start: {:?}, End: {:?}", start_position, end_position);
+
+        while current_position != end_position {
+            println!("{:?}", current_position);
+
+            shapes
+                .cuboid()
+                .position(current_position.as_vec3())
+                .size(Vec3::ONE)
+                .duration(5.0);
+
+            if t_max_x < t_max_y && t_max_x < t_max_z {
+                // X-axis traversal.
+                current_position.x += step_x;
+                t_max_x += t_delta_x;
+            } else if t_max_y < t_max_z {
+                // Y-axis traversal.
+                current_position.y += step_y;
+                t_max_y += t_delta_y;
+            } else {
+                // Z-axis traversal.
+                current_position.z += step_z;
+                t_max_z += t_delta_z;
+            }
+
+            count += 1;
+            if count > 16 {
+                return None;
+            }
+
+            if !self.is_empty(current_position) {
+                println!(
+                    "Non Empty: {:?}, prev:{:?}",
+                    current_position, prev_position
+                );
+                return Some(prev_position);
+            }
+
+            prev_position = current_position;
+        }
+
+        None
     }
 
     pub fn compute_bounds(&self) -> Aabb {
@@ -241,7 +356,10 @@ impl LevelInstance {
             max = max.max(*position);
         });
 
-        Aabb::from_min_max(min.as_vec3() - Vec3::ONE, max.as_vec3() + Vec3::ONE)
+        Aabb::from_min_max(
+            min.as_vec3() - 0.5 * Vec3::ONE,
+            max.as_vec3() + 0.5 * Vec3::ONE,
+        )
     }
 }
 

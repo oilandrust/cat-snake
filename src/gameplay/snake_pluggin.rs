@@ -13,7 +13,7 @@ use crate::{
     GameState,
 };
 
-use super::level_pluggin::{LevelTemplate, LoadedLevel};
+use crate::level::level_template::{LevelTemplate, LoadedLevel};
 
 pub struct SnakePluggin;
 

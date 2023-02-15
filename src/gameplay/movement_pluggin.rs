@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    level_pluggin::Goal,
+    level_pluggin::{Goal, GridEntity},
     snake_pluggin::{
         DespawnSnakePartEvent, MaterialMeshBuilder, PartClipper, SnakeElement, SnakePart,
     },
@@ -232,8 +232,8 @@ pub fn snake_movement_control_system(
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
-    foods_query: Query<&Food>,
-    goal_query: Query<&Goal, With<Active>>,
+    foods_query: Query<&GridEntity, With<Food>>,
+    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
 ) {
     let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
         return;
@@ -347,7 +347,7 @@ pub fn grow_snake_on_move_system(
     mut materials: ResMut<bevy::asset::Assets<StandardMaterial>>,
     mut commands: Commands,
     snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
-    foods_query: Query<(Entity, &Food), With<Food>>,
+    foods_query: Query<(Entity, &GridEntity), With<Food>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
@@ -527,7 +527,7 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
-    goal_query: Query<&Goal, With<Active>>,
+    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
 ) {
     let Ok(goal) = goal_query.get_single() else {
         return;
