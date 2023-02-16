@@ -166,8 +166,7 @@ pub fn run(app: &mut App, args: &Args) {
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
     pub background_noise: Handle<AudioSource>,
-    pub move_effect_1: Handle<AudioSource>,
-    pub move_effect_2: Handle<AudioSource>,
+    pub move_effect: Handle<AudioSource>,
     pub outline_texture: Handle<Image>,
     pub cube_mesh: Handle<Mesh>,
     pub default_material: Handle<StandardMaterial>,
@@ -181,8 +180,7 @@ fn load_assets(
 ) {
     commands.insert_resource(GameAssets {
         background_noise: asset_server.load("beach.mp3"),
-        move_effect_1: asset_server.load("effects1.mp3"),
-        move_effect_2: asset_server.load("effects2.mp3"),
+        move_effect: asset_server.load("move_effect.mp3"),
         outline_texture: asset_server.load("outline.png"),
         cube_mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
         default_material: materials.add(StandardMaterial {

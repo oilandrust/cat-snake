@@ -78,12 +78,15 @@ pub struct SnakeReachGoalEvent(pub Entity);
 
 pub struct SnakeExitedLevelEvent;
 
-const KEYBOARD_INPUT: &str = "KEYBOARD_INPUT";
-const UNDO: &str = "UNDO";
-const SNAKE_MOVEMENT: &str = "SNAKE_MOVEMENT";
-const SNAKE_GROW: &str = "SNAKE_GROW";
-const SNAKE_FALL: &str = "SNAKE_FALL";
-const SMOOTH_MOVEMENT: &str = "SMOOTH_MOVEMENT";
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel, StageLabel)]
+enum MovementStages {
+    KeyboardInput,
+    Undo,
+    SnakeMovement,
+    SnakeGrow,
+    SnakeFall,
+    SmoothMovement,
+}
 
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
@@ -96,7 +99,7 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(KEYBOARD_INPUT)
+                    .label(MovementStages::KeyboardInput)
                     .with_system(keyboard_undo_system)
                     .with_system(keyboard_move_command_system)
                     .into(),
@@ -105,8 +108,8 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(UNDO)
-                    .after(KEYBOARD_INPUT)
+                    .label(MovementStages::Undo)
+                    .after(MovementStages::KeyboardInput)
                     .with_system(undo_event_system)
                     .into(),
             )
@@ -114,23 +117,23 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(SNAKE_MOVEMENT)
-                    .after(UNDO)
+                    .label(MovementStages::SnakeMovement)
+                    .after(MovementStages::Undo)
                     .with_system(snake_movement_control_system)
                     .into(),
             )
             .add_system(
                 grow_snake_on_move_system
                     .run_in_state(GameState::Game)
-                    .label(SNAKE_GROW)
-                    .after(SNAKE_MOVEMENT),
+                    .label(MovementStages::SnakeGrow)
+                    .after(MovementStages::SnakeMovement),
             )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(SNAKE_FALL)
-                    .after(SNAKE_GROW)
+                    .label(MovementStages::SnakeFall)
+                    .after(MovementStages::SnakeGrow)
                     .with_system(gravity_system)
                     .into(),
             )
@@ -138,8 +141,8 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(SMOOTH_MOVEMENT)
-                    .after(SNAKE_FALL)
+                    .label(MovementStages::SmoothMovement)
+                    .after(MovementStages::SnakeFall)
                     .with_system(snake_smooth_movement_system)
                     .with_system(snake_push_anim_system)
                     .with_system(snake_exit_level_anim_system)
@@ -335,7 +338,7 @@ pub fn snake_movement_control_system(
     }
 
     audio
-        .play(assets.move_effect_2.clone())
+        .play(assets.move_effect.clone())
         .with_playback_rate(1.0 + rand::thread_rng().gen_range(-0.05..0.1))
         .with_volume(2.0);
 }
@@ -570,7 +573,7 @@ pub fn snake_exit_level_anim_system(
             snake.set_parts(level_exit.initial_snake_position.clone());
         } else {
             commands.entity(entity).insert(MoveCommand {
-                velocity: 2.0 * constants.move_velocity,
+                velocity: 1.5 * constants.move_velocity,
                 lerp_time: 0.0,
             });
             let direction = IVec3::NEG_Y;

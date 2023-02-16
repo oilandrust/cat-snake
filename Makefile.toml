@@ -36,6 +36,9 @@ assets = array_concat ${assets} ${ttfs}
 shaders = glob_array assets/**/*.wgsl
 assets = array_concat ${assets} ${shaders}
 
+levels = glob_array assets/**/*.lvl
+assets = array_concat ${assets} ${levels}
+
 for path in ${assets}
     cp ${path} release/${PLATFORM}/${path}
 end
