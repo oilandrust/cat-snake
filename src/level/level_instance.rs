@@ -205,7 +205,11 @@ impl LevelInstance {
         distance
     }
 
-    pub fn find_first_free_cell_on_ray(&self, ray: Ray, shapes: &mut DebugShapes) -> Option<IVec3> {
+    pub fn find_first_free_cell_on_ray(
+        &self,
+        ray: Ray,
+        _shapes: &mut DebugShapes,
+    ) -> Option<IVec3> {
         let aabb = self.compute_bounds();
 
         // we extend the bounds by one unit so that there will always be a empty cell before the first non empty cell.

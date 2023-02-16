@@ -93,7 +93,7 @@ fn setup_menu(mut commands: Commands, menu_styles: Res<MenuStyles>) {
     let title = commands
         .spawn((
             TextBundle {
-                text: Text::from_section("BirdSnake", menu_styles.title_style.clone()),
+                text: Text::from_section("CatSnake", menu_styles.title_style.clone()),
                 style: menu_styles.button_style.clone(),
                 ..Default::default()
             },

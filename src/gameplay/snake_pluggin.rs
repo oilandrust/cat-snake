@@ -160,10 +160,6 @@ impl Snake {
         self.parts.front().unwrap().0
     }
 
-    pub fn head_direction(&self) -> IVec3 {
-        self.parts.front().unwrap().1
-    }
-
     pub fn grow(&mut self) {
         let (tail_position, tail_direction) = self.tail();
         let new_part_position = tail_position - tail_direction;

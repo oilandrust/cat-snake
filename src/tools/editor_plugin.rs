@@ -1,4 +1,4 @@
-use std::{fmt::format, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_prototype_debug_lines::DebugShapes;
@@ -74,12 +74,6 @@ impl Plugin for EditorPlugin {
                     .with_system(update_snake_transforms_system)
                     .with_system(move_selected_grid_entity)
                     .into(),
-            )
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(GameState::Editor)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .into(),
             );
     }
 }
@@ -124,6 +118,9 @@ fn init_level_instance_system(mut commands: Commands) {
         .insert(Name::new("Editor Camera 3D Free"));
 }
 
+#[derive(Resource, Default)]
+pub struct ResumeFromEditor;
+
 fn stop_editor_system(
     keyboard: Res<Input<KeyCode>>,
     mut commands: Commands,
@@ -135,6 +132,7 @@ fn stop_editor_system(
         return;
     }
 
+    commands.insert_resource(ResumeFromEditor);
     commands.insert_resource(LoadingLevel(asset_server.load(&current_level_asset_path.0)));
     commands.insert_resource(NextState(GameState::Game));
     commands.entity(editor_camera.single()).despawn();

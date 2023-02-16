@@ -10,6 +10,7 @@ use gameplay::level_pluggin::{
 };
 use gameplay::movement_pluggin::MovementPluggin;
 use gameplay::snake_pluggin::SnakePluggin;
+use iyes_loopless::prelude::IntoConditionalSystem;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
@@ -18,7 +19,7 @@ use menus::main_menu::MainMenuPlugin;
 use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
 use menus::MenuPlugin;
 use tools::dev_tools_pluggin::DevToolsPlugin;
-use tools::editor_plugin::EditorPlugin;
+use tools::editor_plugin::{EditorPlugin, ResumeFromEditor};
 
 pub mod args;
 mod gameplay;
@@ -67,12 +68,16 @@ impl Plugin for GamePlugin {
         //app.add_plugin(AutomatedTestPluggin);
         //}
 
-        app.add_enter_system(GameState::Game, enter_game_system);
+        app.add_enter_system(
+            GameState::Game,
+            enter_game_system.run_unless_resource_exists::<ResumeFromEditor>(),
+        )
+        .add_enter_system(
+            GameState::Game,
+            return_from_editor_system.run_if_resource_exists::<ResumeFromEditor>(),
+        );
     }
 }
-
-#[derive(Default)]
-struct RunOnce(bool);
 
 fn enter_game_system(
     args: Res<Args>,
@@ -80,13 +85,7 @@ fn enter_game_system(
     // mut start_test_case_event: EventWriter<StartTestCaseEventWithIndex>,
     mut start_test_level_event: EventWriter<StartTestLevelEventWithIndex>,
     mut start_level_event: EventWriter<StartLevelEventWithIndex>,
-    mut was_run: Local<RunOnce>,
 ) {
-    if was_run.0 {
-        return;
-    }
-    was_run.0 = true;
-
     match args.command {
         Some(args::Commands::Test { test_case: _ }) => {
             // let start_test_case = test_case.unwrap_or(0);
@@ -101,6 +100,10 @@ fn enter_game_system(
     };
 
     start_level_event.send(StartLevelEventWithIndex(next_level.0));
+}
+
+fn return_from_editor_system(mut commands: Commands) {
+    commands.remove_resource::<ResumeFromEditor>();
 }
 
 fn back_to_menu_on_escape_system(
@@ -138,7 +141,7 @@ pub fn run(app: &mut App, args: &Args) {
             DefaultPlugins
                 .set(WindowPlugin {
                     window: WindowDescriptor {
-                        title: "Bird Snake".to_string(),
+                        title: "CatSnake".to_string(),
                         width: 1080.0,
                         height: 720.0,
                         ..default()
