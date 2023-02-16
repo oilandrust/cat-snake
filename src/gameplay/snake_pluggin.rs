@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::SNAKE_COLORS,
-    gameplay::level_pluggin::LevelEntity,
+    gameplay::level_entities::LevelEntity,
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{LevelEntityType, LevelInstance},

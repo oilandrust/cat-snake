@@ -6,7 +6,7 @@ use crate::{
 };
 use bevy::prelude::*;
 
-use super::level_pluggin::GridEntity;
+use super::level_entities::GridEntity;
 
 /// Provides commands that implement the undoable game mechanics.
 /// Commands manage the state of the game data such as snakes, food, etc..

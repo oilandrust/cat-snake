@@ -2,11 +2,11 @@ Cleanup:
     * Fix high CPU usage
     * Fix and test game mode and automated tests
 
+Game:
+    * Goal transition
+    * Box entity pushable
+    
 Editor:
+    * Create new level
     * Click to add wall
         * Fix imprecision
-    * Select entity, wireframe
-    * Move entities.
-    * Remove entities.
-    * Add other type of entities.
-    * Camera controls

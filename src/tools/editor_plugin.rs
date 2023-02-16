@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write};
+use std::{fmt::format, fs::File, io::Write};
 
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_prototype_debug_lines::DebugShapes;
@@ -9,11 +9,12 @@ use iyes_loopless::{
 use ron::ser::PrettyConfig;
 
 use crate::{
-    despawn_with,
+    despawn_entities, despawn_with,
     gameplay::{
+        level_entities::*,
         level_pluggin::{
-            clear_level_runtime_resources_system, spawn_level_entities_system, spawn_wall,
-            CurrentLevelResourcePath, Food, GridEntity, LevelEntity, LevelLoadedEvent, Spike, Wall,
+            clear_level_runtime_resources_system, spawn_level_entities_system,
+            CurrentLevelAssetPath, LevelLoadedEvent,
         },
         snake_pluggin::{
             spawn_snake_system, update_snake_transforms_system, MaterialMeshBuilder, Snake,
@@ -21,8 +22,8 @@ use crate::{
         },
     },
     level::{
-        level_instance::LevelInstance,
-        level_template::{LevelTemplate, LoadingLevel},
+        level_instance::{LevelEntityType, LevelInstance},
+        level_template::{LevelTemplate, LoadedLevel, LoadingLevel},
     },
     tools::{
         cameras::{camera_3d_free, EditorCamera},
@@ -39,10 +40,16 @@ use super::{
 
 pub struct EditorPlugin;
 
+#[derive(Resource, Default)]
+struct EditorState {
+    insert_entity_type: LevelEntityType,
+}
+
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(DefaultPickingPlugins)
             .add_plugin(FlycamPlugin)
+            .insert_resource(EditorState::default())
             .add_system(start_editor_system.run_in_state(GameState::Game))
             .add_system(stop_editor_system.run_in_state(GameState::Editor))
             .add_enter_system(GameState::Editor, init_level_instance_system)
@@ -59,8 +66,10 @@ impl Plugin for EditorPlugin {
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
-                    .with_system(add_wall_on_click_system)
+                    .with_system(choose_entity_to_add_system)
+                    .with_system(add_entity_on_click_system)
                     .with_system(delete_selected_wall_system)
+                    .with_system(create_new_level_system)
                     .with_system(save_level_system)
                     .with_system(update_snake_transforms_system)
                     .with_system(move_selected_grid_entity)
@@ -70,8 +79,6 @@ impl Plugin for EditorPlugin {
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
                     .run_if_resource_exists::<LevelInstance>()
-                    //.with_system(camera_zoom_scroll_system)
-                    //.with_system(camera_pan_system)
                     .into(),
             );
     }
@@ -120,8 +127,9 @@ fn init_level_instance_system(mut commands: Commands) {
 fn stop_editor_system(
     keyboard: Res<Input<KeyCode>>,
     mut commands: Commands,
-    current_level_asset_path: Res<CurrentLevelResourcePath>,
+    current_level_asset_path: Res<CurrentLevelAssetPath>,
     asset_server: Res<AssetServer>,
+    editor_camera: Query<Entity, With<EditorCamera>>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::E) {
         return;
@@ -129,12 +137,29 @@ fn stop_editor_system(
 
     commands.insert_resource(LoadingLevel(asset_server.load(&current_level_asset_path.0)));
     commands.insert_resource(NextState(GameState::Game));
+    commands.entity(editor_camera.single()).despawn();
+}
+
+fn choose_entity_to_add_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut editor_state: ResMut<EditorState>,
+) {
+    if keyboard.just_pressed(KeyCode::G) {
+        editor_state.insert_entity_type = LevelEntityType::Goal;
+    } else if keyboard.just_pressed(KeyCode::F) {
+        editor_state.insert_entity_type = LevelEntityType::Food;
+    } else if keyboard.just_pressed(KeyCode::H) {
+        editor_state.insert_entity_type = LevelEntityType::Wall;
+    } else if keyboard.just_pressed(KeyCode::K) {
+        editor_state.insert_entity_type = LevelEntityType::Spike;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn add_wall_on_click_system(
+fn add_entity_on_click_system(
     buttons: Res<Input<MouseButton>>,
     keyboard: Res<Input<KeyCode>>,
+    editor_state: Res<EditorState>,
     windows: Res<Windows>,
     mut commands: Commands,
     camera: Query<(&Camera, &GlobalTransform), With<EditorCamera>>,
@@ -161,14 +186,40 @@ fn add_wall_on_click_system(
         materials: materials.as_mut(),
     };
 
-    if let Some(position) = level_instance.find_first_free_cell_on_ray(ray, shapes.as_mut()) {
-        spawn_wall(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-            assets.as_ref(),
-        );
+    let Some(position) = level_instance.find_first_free_cell_on_ray(ray, shapes.as_mut()) else {
+        return;
+    };
+
+    match editor_state.insert_entity_type {
+        LevelEntityType::Food => {
+            spawn_food(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+            );
+        }
+        LevelEntityType::Spike => {
+            spawn_spike(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+            );
+        }
+        LevelEntityType::Wall => {
+            spawn_wall(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+                assets.as_ref(),
+            );
+        }
+        LevelEntityType::Snake(_) => {}
+        LevelEntityType::Goal => {
+            spawn_goal(&mut mesh_builder, &mut commands, &position);
+        }
     }
 }
 
@@ -263,12 +314,43 @@ fn delete_selected_wall_system(
     }
 }
 
+fn create_new_level_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut level_loaded_event: EventWriter<LevelLoadedEvent>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    mut levels: ResMut<Assets<LevelTemplate>>,
+    mut commands: Commands,
+    entities: Query<Entity, With<LevelEntity>>,
+) {
+    if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::N) {
+        return;
+    }
+    despawn_entities::<LevelEntity>(&mut commands, entities);
+
+    let mut walls = Vec::with_capacity(10 * 10);
+    for j in -5..5 {
+        for i in -5..5 {
+            walls.push(IVec3::new(i, 0, j));
+        }
+    }
+
+    let new_tempale = LevelTemplate { walls, ..default() };
+
+    commands.insert_resource(CurrentLevelAssetPath("levels/new.lvl".to_owned()));
+    commands.insert_resource(LoadedLevel(levels.add(new_tempale)));
+    commands.insert_resource(LevelInstance::new());
+    level_loaded_event.send(LevelLoadedEvent);
+    spawn_snake_event.send(SpawnSnakeEvent);
+}
+
 fn save_level_system(
     keyboard: Res<Input<KeyCode>>,
+    current_level_asset_path: Res<CurrentLevelAssetPath>,
     snake_query: Query<&Snake>,
     walls_query: Query<&GridEntity, With<Wall>>,
     foods_query: Query<&GridEntity, With<Food>>,
     spikes_query: Query<&GridEntity, With<Spike>>,
+    goal_query: Query<&GridEntity, With<Goal>>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
         return;
@@ -282,14 +364,16 @@ fn save_level_system(
         foods: foods_query.into_iter().map(|entity| entity.0).collect(),
         spikes: spikes_query.into_iter().map(|entity| entity.0).collect(),
         walls: walls_query.into_iter().map(|entity| entity.0).collect(),
+        goal: goal_query.get_single().map(|entity| entity.0).ok(),
     };
 
     let ron_string = ron::ser::to_string_pretty(&template, PrettyConfig::default()).unwrap();
+    let level_asset_path = current_level_asset_path.0.clone();
 
     #[cfg(not(target_arch = "wasm32"))]
     IoTaskPool::get()
         .spawn(async move {
-            File::create("assets/level1.lvl")
+            File::create(format!("assets/{}", level_asset_path))
                 .and_then(|mut file| file.write(ron_string.as_bytes()))
                 .expect("Error while writing scene to file");
         })

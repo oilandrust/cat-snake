@@ -4,9 +4,9 @@ use bevy_kira_audio::{AudioPlugin, AudioSource};
 use bevy_tweening::TweeningPlugin;
 use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_pluggin::*;
+use gameplay::level_entities::LevelEntity;
 use gameplay::level_pluggin::{
-    ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
-    StartTestLevelEventWithIndex,
+    ClearLevelEvent, LevelPluggin, StartLevelEventWithIndex, StartTestLevelEventWithIndex,
 };
 use gameplay::movement_pluggin::MovementPluggin;
 use gameplay::snake_pluggin::SnakePluggin;
@@ -114,10 +114,14 @@ fn back_to_menu_on_escape_system(
     }
 }
 
-pub fn despawn_with<T: Component>(mut commands: Commands, q: Query<Entity, With<T>>) {
+pub fn despawn_entities<T: Component>(commands: &mut Commands, q: Query<Entity, With<T>>) {
     for e in q.iter() {
         commands.entity(e).despawn_recursive();
     }
+}
+
+pub fn despawn_with<T: Component>(mut commands: Commands, query: Query<Entity, With<T>>) {
+    despawn_entities(&mut commands, query);
 }
 
 pub fn run(app: &mut App, args: &Args) {

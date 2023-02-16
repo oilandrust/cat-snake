@@ -8,12 +8,14 @@ use crate::{
 };
 use bevy_prototype_debug_lines::DebugShapes;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum LevelEntityType {
     Food,
     Spike,
+    #[default]
     Wall,
     Snake(i32),
+    Goal,
 }
 
 #[derive(Resource)]
@@ -211,12 +213,12 @@ impl LevelInstance {
         let bound_min: Vec3 = (aabb.min() - Vec3A::ONE).into();
         let bound_max: Vec3 = (aabb.max() + Vec3A::ONE).into();
 
-        shapes
-            .cuboid()
-            .position(aabb.center.into())
-            .size(bound_max - bound_min)
-            .duration(5.0)
-            .color(Color::GREEN);
+        // shapes
+        //     .cuboid()
+        //     .position(aabb.center.into())
+        //     .size(bound_max - bound_min)
+        //     .duration(5.0)
+        //     .color(Color::GREEN);
 
         let Some([t_min, t_max]) = ray_intersects_aabb(ray, &Aabb::from_min_max(bound_min, bound_max), &Mat4::IDENTITY) else {
             return None;
@@ -225,19 +227,19 @@ impl LevelInstance {
         let ray_start = ray.origin + ray.direction * t_min;
         let ray_end = ray.origin + ray.direction * t_max;
 
-        shapes
-            .cuboid()
-            .position(ray_start)
-            .size(0.2 * Vec3::ONE)
-            .duration(5.0)
-            .color(Color::RED);
+        // shapes
+        //     .cuboid()
+        //     .position(ray_start)
+        //     .size(0.2 * Vec3::ONE)
+        //     .duration(5.0)
+        //     .color(Color::RED);
 
-        shapes
-            .cuboid()
-            .position(ray_end)
-            .size(0.2 * Vec3::ONE)
-            .duration(5.0)
-            .color(Color::RED);
+        // shapes
+        //     .cuboid()
+        //     .position(ray_end)
+        //     .size(0.2 * Vec3::ONE)
+        //     .duration(5.0)
+        //     .color(Color::RED);
 
         let sign = |x| {
             if x > 0.0 {
@@ -300,15 +302,15 @@ impl LevelInstance {
         let start_position = Vec3::new(x1 - 0.5, y1 - 0.5, z1 - 0.5).round().as_ivec3();
         let mut current_position = start_position;
         let mut prev_position = current_position;
-        println!("========");
-        println!("Start: {:?}", start_position);
+        // println!("========");
+        // println!("Start: {:?}", start_position);
 
         loop {
-            shapes
-                .cuboid()
-                .position(current_position.as_vec3())
-                .size(Vec3::ONE)
-                .duration(5.0);
+            // shapes
+            //     .cuboid()
+            //     .position(current_position.as_vec3())
+            //     .size(Vec3::ONE)
+            //     .duration(5.0);
 
             if t_max_x < t_max_y {
                 if t_max_x < t_max_z {
@@ -332,10 +334,10 @@ impl LevelInstance {
             // process voxel here
 
             if !self.is_empty(current_position) {
-                println!(
-                    "Non Empty: {:?}, prev:{:?}",
-                    current_position, prev_position
-                );
+                // println!(
+                //     "Non Empty: {:?}, prev:{:?}",
+                //     current_position, prev_position
+                // );
                 return Some(prev_position);
             }
 

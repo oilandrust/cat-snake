@@ -4,9 +4,9 @@ use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
     gameplay::level_pluggin::{
-        load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath, LOAD_LEVEL_STAGE,
+        load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath,
     },
-    gameplay::movement_pluggin::MoveCommandEvent,
+    gameplay::{level_pluggin::LevelStages, movement_pluggin::MoveCommandEvent},
 };
 
 #[derive(Clone)]
@@ -55,7 +55,10 @@ impl Plugin for AutomatedTestPluggin {
                     .with_run_criteria(FixedTimestep::step(1.0))
                     .with_system(moc_player_input),
             )
-            .add_system_to_stage(LOAD_LEVEL_STAGE, start_test_case.before(load_level_system));
+            .add_system_to_stage(
+                LevelStages::LoadLevelStage,
+                start_test_case.before(load_level_system),
+            );
     }
 }
 

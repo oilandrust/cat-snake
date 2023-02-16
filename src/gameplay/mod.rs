@@ -1,6 +1,7 @@
 pub mod camera_plugin;
 pub mod commands;
 pub mod game_constants_pluggin;
+pub mod level_entities;
 pub mod level_pluggin;
 pub mod movement_pluggin;
 pub mod snake_pluggin;

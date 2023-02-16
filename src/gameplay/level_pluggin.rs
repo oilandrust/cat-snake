@@ -5,27 +5,23 @@ use iyes_loopless::prelude::{
 };
 
 use crate::{
-    gameplay::commands::SnakeCommands,
-    gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
-    gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
-    gameplay::undo::SnakeHistory,
-    level::level_instance::{LevelEntityType, LevelInstance},
+    level::level_instance::LevelInstance,
+    level::level_template::{LevelTemplateLoader, LoadedLevel},
     level::{
         level_template::{LevelTemplate, LoadingLevel},
-        levels::LEVELS,
+        levels::*,
     },
-    level::{
-        level_template::{LevelTemplateLoader, LoadedLevel},
-        test_levels::TEST_LEVELS,
-    },
-    tools::picking::PickableBundle,
     Assets, GameAssets, GameState,
 };
 
 use super::{
-    game_constants_pluggin::{FOOD_COLOR, SPIKE_COLOR},
+    commands::SnakeCommands,
+    level_entities::*,
+    movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
     snake_pluggin::MaterialMeshBuilder,
+    snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
+    undo::SnakeHistory,
 };
 
 pub struct StartLevelEventWithIndex(pub usize);
@@ -34,38 +30,23 @@ pub struct StartLevelEventWithLevelAssetPath(pub String);
 pub struct LevelLoadedEvent;
 pub struct ClearLevelEvent;
 
-#[derive(Component, Reflect)]
-pub struct LevelEntity;
-
-#[derive(Component, Clone, Copy)]
-pub struct GridEntity(pub IVec3);
-
-#[derive(Component, Clone, Copy)]
-pub struct Wall;
-
-#[derive(Component, Clone, Copy)]
-pub struct Food;
-
-#[derive(Component, Clone, Copy)]
-pub struct Spike;
-
-#[derive(Component, Clone, Copy)]
-pub struct Goal;
-
 #[derive(Resource)]
 pub struct CurrentLevelId(pub usize);
 
 #[derive(Resource)]
-pub struct CurrentLevelResourcePath(pub String);
+pub struct CurrentLevelAssetPath(pub String);
 
 pub struct LevelPluggin;
 
 #[derive(Component, Clone, Copy)]
 pub struct Water;
 
-pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
-static PRE_LOAD_LEVEL_LABEL: &str = "PreloadLevel";
-static CHEK_LEVEL_CONDITION_LABEL: &str = "CheckLevelCondition";
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel, StageLabel)]
+pub enum LevelStages {
+    LoadLevelStage,
+    PreloadLevel,
+    CheckLevelCondition,
+}
 
 impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
@@ -91,35 +72,35 @@ impl Plugin for LevelPluggin {
                 notify_level_loaded_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LoadingLevel>()
-                    .label(PRE_LOAD_LEVEL_LABEL),
+                    .label(LevelStages::LoadLevelStage),
             )
             .add_system_to_stage(
                 CoreStage::PreUpdate,
                 spawn_level_entities_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .after(PRE_LOAD_LEVEL_LABEL),
+                    .after(LevelStages::PreloadLevel),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 activate_goal_when_all_food_eaten_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(CHEK_LEVEL_CONDITION_LABEL),
+                    .label(LevelStages::CheckLevelCondition),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 check_for_level_completion_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(CHEK_LEVEL_CONDITION_LABEL),
+                    .label(LevelStages::CheckLevelCondition),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 start_snake_exit_level_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .after(CHEK_LEVEL_CONDITION_LABEL),
+                    .after(LevelStages::CheckLevelCondition),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -130,8 +111,7 @@ impl Plugin for LevelPluggin {
             .add_system_to_stage(
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
-            )
-            .add_system(rotate_goal_system.run_in_state(GameState::Game));
+            );
     }
 }
 
@@ -145,14 +125,12 @@ fn load_level_with_index_system(
     };
 
     let next_level_index = event.0;
-    event_start_level.send(StartLevelEventWithLevelAssetPath(
-        LEVELS[next_level_index].to_owned(),
-    ));
+    let level_asset_path = format!("levels/{}", LEVELS[next_level_index]);
+
+    event_start_level.send(StartLevelEventWithLevelAssetPath(level_asset_path.clone()));
 
     commands.insert_resource(CurrentLevelId(next_level_index));
-    commands.insert_resource(CurrentLevelResourcePath(
-        LEVELS[next_level_index].to_owned(),
-    ));
+    commands.insert_resource(CurrentLevelAssetPath(level_asset_path));
 }
 
 fn load_test_level_with_index_system(
@@ -165,14 +143,12 @@ fn load_test_level_with_index_system(
     };
 
     let next_level_index = event.0;
-    event_start_level.send(StartLevelEventWithLevelAssetPath(
-        TEST_LEVELS[next_level_index].to_owned(),
-    ));
+    let level_asset_path = format!("test_levels/{}", TEST_LEVELS[next_level_index]);
+
+    event_start_level.send(StartLevelEventWithLevelAssetPath(level_asset_path.clone()));
 
     commands.insert_resource(CurrentLevelId(next_level_index));
-    commands.insert_resource(CurrentLevelResourcePath(
-        TEST_LEVELS[next_level_index].to_owned(),
-    ));
+    commands.insert_resource(CurrentLevelAssetPath(level_asset_path));
 }
 
 pub fn load_level_system(
@@ -307,93 +283,10 @@ pub fn spawn_level_entities_system(
             &mut level_instance,
         );
     }
-}
 
-pub fn spawn_spike(
-    mesh_builder: &mut MaterialMeshBuilder,
-    commands: &mut Commands,
-    position: &IVec3,
-    level_instance: &mut LevelInstance,
-) {
-    commands.spawn((
-        mesh_builder.build_spike_mesh(*position),
-        GridEntity(*position),
-        Spike,
-        LevelEntity,
-    ));
-
-    level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
-}
-
-impl<'a> MaterialMeshBuilder<'a> {
-    pub fn build_food_mesh(&mut self, position: IVec3) -> PbrBundle {
-        PbrBundle {
-            mesh: self.meshes.add(Mesh::from(shape::Icosphere {
-                radius: 0.3,
-                subdivisions: 5,
-            })),
-            material: self.materials.add(FOOD_COLOR.into()),
-            transform: Transform::from_translation(position.as_vec3()),
-            ..default()
-        }
-    }
-
-    pub fn build_spike_mesh(&mut self, position: IVec3) -> PbrBundle {
-        PbrBundle {
-            mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.5 })),
-            material: self.materials.add(SPIKE_COLOR.into()),
-            transform: Transform::from_translation(position.as_vec3()),
-            ..default()
-        }
-    }
-}
-
-pub fn spawn_wall(
-    mesh_builder: &mut MaterialMeshBuilder,
-    commands: &mut Commands,
-    position: &IVec3,
-    level_instance: &mut LevelInstance,
-    assets: &GameAssets,
-) {
-    let ground_material = mesh_builder.materials.add(StandardMaterial {
-        base_color: Color::rgb(0.8, 0.7, 0.6),
-        base_color_texture: Some(assets.outline_texture.clone()),
-        ..default()
-    });
-
-    commands.spawn((
-        PbrBundle {
-            mesh: mesh_builder
-                .meshes
-                .add(Mesh::from(shape::Cube { size: 1.0 })),
-            material: ground_material,
-            transform: Transform::from_translation(position.as_vec3()),
-            ..default()
-        },
-        LevelEntity,
-        GridEntity(*position),
-        Wall,
-        PickableBundle::default(),
-    ));
-
-    level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
-}
-
-pub fn spawn_food(
-    mesh_builder: &mut MaterialMeshBuilder,
-    commands: &mut Commands,
-    position: &IVec3,
-    level_instance: &mut LevelInstance,
-) {
-    commands.spawn((
-        mesh_builder.build_food_mesh(*position),
-        GridEntity(*position),
-        Food,
-        LevelEntity,
-        PickableBundle::default(),
-    ));
-
-    level_instance.mark_position_occupied(*position, LevelEntityType::Food);
+    if let Some(goal_position) = level_template.goal {
+        spawn_goal(&mut mesh_builder, &mut commands, &goal_position);
+    };
 }
 
 pub fn clear_level_system(
@@ -428,23 +321,6 @@ fn activate_goal_when_all_food_eaten_system(
         }
     } else if active.is_some() {
         commands.entity(goal_entity).remove::<Active>();
-    }
-}
-
-fn rotate_goal_system(
-    time: Res<Time>,
-    mut goal_query: Query<(&mut Transform, Option<&Active>), With<Goal>>,
-) {
-    let Ok((mut transform, active)) = goal_query.get_single_mut() else {
-        return;
-    };
-
-    if active.is_some() {
-        transform.rotate_local_z(time.delta_seconds() * 0.7);
-        transform.scale = (1.6 + 0.3 * (time.elapsed_seconds() * 1.0).sin()) * Vec3::ONE;
-    } else {
-        transform.rotate_local_z(time.delta_seconds() * 0.3);
-        transform.scale = Vec3::ONE;
     }
 }
 

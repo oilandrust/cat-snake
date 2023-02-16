@@ -9,7 +9,6 @@ use rand::prelude::*;
 use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::*,
-    gameplay::level_pluggin::Food,
     gameplay::snake_pluggin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::level_instance::LevelInstance,
@@ -17,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    level_pluggin::{Goal, GridEntity},
+    level_entities::*,
     snake_pluggin::{
         DespawnSnakePartEvent, MaterialMeshBuilder, PartClipper, SnakeElement, SnakePart,
     },
@@ -574,7 +573,7 @@ pub fn snake_exit_level_anim_system(
                 velocity: 2.0 * constants.move_velocity,
                 lerp_time: 0.0,
             });
-            let direction = snake.head_direction();
+            let direction = IVec3::NEG_Y;
             snake.move_forward(direction);
         }
     }

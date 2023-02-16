@@ -9,13 +9,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::gameplay::snake_pluggin::SnakeTemplate;
 
-#[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug)]
+#[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug, Default)]
 #[uuid = "39cadc56-aa9c-4543-8640-a018b74b5052"]
 pub struct LevelTemplate {
     pub snakes: Vec<SnakeTemplate>,
     pub foods: Vec<IVec3>,
     pub walls: Vec<IVec3>,
     pub spikes: Vec<IVec3>,
+    pub goal: Option<IVec3>,
 }
 
 #[derive(Resource)]
