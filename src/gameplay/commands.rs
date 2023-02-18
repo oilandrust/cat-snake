@@ -44,7 +44,7 @@ impl<'a> SnakeCommands<'a> {
 
     pub fn exit_level(&mut self, snake: &'a Snake, entity: Entity, falling: Option<&GravityFall>) {
         let updates = if falling.is_none() {
-            self.level_instance.clear_snake_positions(snake)
+            self.level_instance.clear_posisitons(&snake.positions())
         } else {
             vec![]
         };
@@ -57,21 +57,23 @@ impl<'a> SnakeCommands<'a> {
     }
 
     /// Execute a command when a skake start falling.
-    pub fn start_falling(&mut self, snake: &'a Snake, entity: Entity) {
-        let updates = self.level_instance.clear_snake_positions(snake);
+    pub fn start_falling(&mut self, snake: &'a dyn Movable, entity: LevelGridEntity) {
+        let updates = self.level_instance.clear_posisitons(&snake.positions());
 
         self.history.push_with_updates(
             MoveHistoryEvent::BeginFall(BeginFall {
-                parts: snake.parts().clone().into(),
+                positions: snake.positions(),
                 end: None,
             }),
-            LevelGridEntity::new(entity, EntityType::Snake),
+            entity,
             updates,
         );
     }
 
-    pub fn stop_falling(&mut self, snake: &'a Snake, entity: Entity) {
-        let updates = self.level_instance.mark_snake_positions(snake, entity);
+    pub fn stop_falling(&mut self, snake: &'a dyn Movable, entity: LevelGridEntity) {
+        let updates = self
+            .level_instance
+            .mark_entity_positions(&snake.positions(), entity);
 
         // Stop fall can happen a long time after beggin fall, and other actions can be done in between.
         // We find the corresponding beggin fall and add the undo info to it so that both can be undone at the same time.
@@ -81,7 +83,7 @@ impl<'a> SnakeCommands<'a> {
             .iter_mut()
             .rev()
             .find(|event| {
-                event.level_entity.entity == entity
+                event.level_entity.entity == entity.entity
                     && matches!(event.event, MoveHistoryEvent::BeginFall(_))
             })
             .unwrap();
@@ -166,7 +168,7 @@ impl<'a> PlayerMoveCommand<'a> {
             let walkable_updates = self.level_instance.eat_food(food.0);
             self.history.push_with_updates(
                 MoveHistoryEvent::Eat(food.0),
-                LevelGridEntity::new(self.entity, EntityType::Snake),
+                LevelGridEntity::new(self.entity, EntityType::Food),
                 walkable_updates,
             );
         }

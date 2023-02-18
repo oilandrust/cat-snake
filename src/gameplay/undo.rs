@@ -8,8 +8,9 @@ use crate::{
 };
 
 use super::{
-    level_entities::{GridEntity, Movable},
-    snake_pluggin::{MaterialMeshBuilder, SnakeElement, SnakeTemplate},
+    level_entities::GridEntity,
+    movement_pluggin::MovableRegistry,
+    snake_pluggin::{MaterialMeshBuilder, SnakeElement},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -21,7 +22,7 @@ pub enum LevelEntityUpdateEvent {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct BeginFall {
     // The initial position of the snake before falling.
-    pub parts: SnakeTemplate,
+    pub positions: Vec<IVec3>,
 
     // An even that is set when the fall ends.
     pub end: Option<EndFall>,
@@ -96,14 +97,14 @@ impl SnakeHistory {
 
     pub fn undo_last(
         &mut self,
-        snakes: &mut Query<&mut Snake>,
-        box_query: &mut Query<&mut GridEntity, With<Box>>,
+        snakes: &mut Query<(Entity, &mut Snake)>,
+        box_query: &mut Query<(Entity, &mut GridEntity), With<Box>>,
         level: &mut LevelInstance,
         commands: &mut Commands,
         part_builder: &mut MaterialMeshBuilder,
         despawn_snake_part_event: &mut EventWriter<DespawnSnakePartEvent>,
     ) {
-        // /let mut snakes: Vec<&mut Snake> = snakes.iter_mut().map(|snake| snake.as_mut()).collect();
+        let mut movable_registry = MovableRegistry::new(snakes, box_query);
 
         // Undo the stack until we reach the last player action.
         while let Some(top) = self.move_history.pop() {
@@ -111,27 +112,27 @@ impl SnakeHistory {
                 return;
             }
 
-            let mut snake = snakes
-                .get_mut(top.level_entity.entity)
-                .expect("Missing snake in query");
-
             match top.event {
                 MoveHistoryEvent::PlayerSnakeMove => {
                     unreachable!("Should be handled as early return above.")
                 }
                 MoveHistoryEvent::SnakeMoveForward(old_tail) => {
+                    let snake = movable_registry.get_mut_snake(&top.level_entity);
                     snake.move_back(&old_tail);
                 }
                 MoveHistoryEvent::PassiveEntityMove(offset) => {
-                    snake.translate(-offset);
+                    let movable = movable_registry.get_mut(&top.level_entity);
+                    movable.translate(-offset);
                 }
                 MoveHistoryEvent::BeginFall(begin) => {
-                    snake.set_parts(begin.parts);
+                    let snake = movable_registry.get_mut(&top.level_entity);
+                    snake.set_positions(&begin.positions);
                     if let Some(end) = begin.end {
                         level.undo_updates(&end.walkable_updates);
                     };
                 }
                 MoveHistoryEvent::Grow => {
+                    let snake = movable_registry.get_mut_snake(&top.level_entity);
                     despawn_snake_part_event.send(DespawnSnakePartEvent(SnakePart {
                         snake_index: snake.index(),
                         part_index: snake.len() - 1,
@@ -143,7 +144,8 @@ impl SnakeHistory {
                     spawn_food(part_builder, commands, &position, level);
                 }
                 MoveHistoryEvent::ExitLevel(snake_entity) => {
-                    set_snake_active(part_builder, commands, snake.as_mut(), snake_entity);
+                    let snake = movable_registry.get_mut_snake(&top.level_entity);
+                    set_snake_active(part_builder, commands, snake, snake_entity);
                 }
             }
 
@@ -177,8 +179,8 @@ pub fn undo_event_system(
     mut level: ResMut<LevelInstance>,
     mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
     mut commands: Commands,
-    mut snake_query: Query<&mut Snake>,
-    mut box_query: Query<&mut GridEntity, With<Box>>,
+    mut snake_query: Query<(Entity, &mut Snake)>,
+    mut box_query: Query<(Entity, &mut GridEntity), With<Box>>,
 ) {
     if trigger_undo_event.iter().next().is_none() {
         return;

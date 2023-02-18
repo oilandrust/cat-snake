@@ -195,12 +195,6 @@ impl Snake {
         self.parts.iter().any(|part| part.0 == position)
     }
 
-    pub fn fall_one_unit(&mut self) {
-        for (position, _) in self.parts.iter_mut() {
-            *position += IVec3::NEG_Y;
-        }
-    }
-
     pub fn set_parts(&mut self, parts: Vec<SnakeElement>) {
         self.parts = parts.into();
     }
@@ -219,6 +213,16 @@ impl Movable for Snake {
         for (position, _) in self.parts.iter_mut() {
             *position += offset;
         }
+    }
+
+    fn set_positions(&mut self, positions: &[IVec3]) {
+        for (index, (position, _)) in self.parts.iter_mut().enumerate() {
+            *position = positions[index];
+        }
+    }
+
+    fn entity_type(&self) -> EntityType {
+        EntityType::Snake
     }
 }
 
@@ -302,13 +306,22 @@ pub fn update_snake_transforms_system(
 }
 
 pub fn update_movable_transforms_system(
-    mut moving_entitites: Query<(&GridEntity, &mut Transform, &PushedAnim)>,
+    mut moving_entitites: Query<(
+        &GridEntity,
+        &mut Transform,
+        Option<&PushedAnim>,
+        Option<&GravityFall>,
+    )>,
 ) {
-    for (grid_entity, mut transform, pushed_anim) in &mut moving_entitites {
-        let initial_offset = -pushed_anim.direction;
-        let push_offset = initial_offset.lerp(Vec3::ZERO, pushed_anim.lerp_time);
+    for (grid_entity, mut transform, pushed_anim, fall) in &mut moving_entitites {
+        let fall_offset = fall.map_or(Vec3::ZERO, |gravity_fall| gravity_fall.relative_z * Vec3::Y);
 
-        transform.translation = grid_entity.0.as_vec3() + push_offset;
+        let push_offset = pushed_anim.map_or(Vec3::ZERO, |command| {
+            let initial_offset = -command.direction;
+            initial_offset.lerp(Vec3::ZERO, command.lerp_time)
+        });
+
+        transform.translation = grid_entity.0.as_vec3() + push_offset + fall_offset;
     }
 }
 
@@ -422,7 +435,10 @@ pub fn respawn_snake_on_fall_system(
         }
 
         let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-        snake_commands.stop_falling(snake, snake_entity);
+        snake_commands.stop_falling(
+            snake,
+            LevelGridEntity::new(snake_entity, snake.entity_type()),
+        );
 
         commands.entity(snake_entity).remove::<GravityFall>();
 

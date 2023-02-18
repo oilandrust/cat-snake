@@ -134,7 +134,16 @@ impl Plugin for MovementPluggin {
                     .run_if_resource_exists::<LevelInstance>()
                     .label(MovementStages::SnakeFall)
                     .after(MovementStages::SnakeGrow)
-                    .with_system(gravity_system)
+                    .with_system(gravity_system::<Snake, (With<Active>, Without<LevelExitAnim>)>)
+                    .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(MovementStages::SnakeFall)
+                    .after(MovementStages::SnakeGrow)
+                    .with_system(gravity_system::<GridEntity, With<Box>>)
                     .into(),
             )
             .add_system_set(
@@ -157,11 +166,14 @@ impl Plugin for MovementPluggin {
     }
 }
 
-fn min_distance_to_ground(level: &LevelInstance, snake: &Snake, snake_entity: Entity) -> i32 {
-    snake
-        .parts()
+fn min_distance_to_ground(
+    level: &LevelInstance,
+    entity_positions: &[IVec3],
+    snake_entity: Entity,
+) -> i32 {
+    entity_positions
         .iter()
-        .map(|(position, _)| level.get_distance_to_ground(*position, snake_entity))
+        .map(|position| level.get_distance_to_ground(*position, snake_entity))
         .min()
         .unwrap()
 }
@@ -221,20 +233,24 @@ fn snake_can_move_forward(
     true
 }
 
-struct MovableRegistry<'a> {
+pub struct MovableRegistry<'a> {
     snake_registry: HashMap<Entity, Mut<'a, Snake>>,
     box_registry: HashMap<Entity, Mut<'a, GridEntity>>,
 }
 
 impl<'a> MovableRegistry<'a> {
-    pub fn new(
-        snake_query: &'a mut Query<(Entity, &mut Snake), Without<SelectedSnake>>,
-        box_query: &'a mut Query<(Entity, &mut GridEntity), (With<Box>, Without<Food>)>,
+    pub fn new<
+        SnakeFilter: bevy::ecs::query::ReadOnlyWorldQuery,
+        BoxFilter: bevy::ecs::query::ReadOnlyWorldQuery,
+    >(
+        snake_query: &'a mut Query<(Entity, &mut Snake), SnakeFilter>,
+        box_query: &'a mut Query<(Entity, &mut GridEntity), BoxFilter>,
     ) -> Self {
         let mut snake_registry: HashMap<Entity, Mut<Snake>> = HashMap::new();
         for (entity, snake) in &mut *snake_query {
             snake_registry.insert(entity, snake);
         }
+
         let mut box_registry: HashMap<Entity, Mut<GridEntity>> = HashMap::new();
         for (entity, movable) in &mut *box_query {
             box_registry.insert(entity, movable);
@@ -256,6 +272,13 @@ impl<'a> MovableRegistry<'a> {
                 .as_ref(),
             _ => panic!("Should not happen"),
         }
+    }
+
+    pub fn get_mut_snake(&mut self, entity: &LevelGridEntity) -> &mut Snake {
+        self.snake_registry
+            .get_mut(&entity.entity)
+            .expect("msg")
+            .as_mut()
     }
 
     pub fn get_mut(&mut self, entity: &LevelGridEntity) -> &mut dyn Movable {
@@ -359,11 +382,7 @@ pub fn snake_movement_control_system(
     // Finaly move the snake forward and commit the state.
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
 
-    let movable = if let Some(entity) = movable_entity {
-        Some((entity, movable_registry.get_mut(&entity)))
-    } else {
-        None
-    };
+    let movable = movable_entity.map(|entity| (entity, movable_registry.get_mut(&entity)));
 
     snake_commands
         .player_move(snake.as_mut(), snake_entity, direction)
@@ -448,7 +467,7 @@ pub fn grow_snake_on_move_system(
 }
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub fn gravity_system(
+pub fn gravity_system<MovableType, Filter>(
     time: Res<Time>,
     constants: Res<GameConstants>,
     mut level: ResMut<LevelInstance>,
@@ -456,26 +475,12 @@ pub fn gravity_system(
     mut trigger_undo_event: EventWriter<UndoEvent>,
     mut snake_reach_goal_event: EventReader<SnakeReachGoalEvent>,
     mut commands: Commands,
-    mut query: Query<
-        (
-            Entity,
-            &mut Snake,
-            Option<&mut GravityFall>,
-            Option<&SelectedSnake>,
-        ),
-        (With<Active>, Without<LevelExitAnim>),
-    >,
-) {
-    let mut sorted_snakes: Vec<(
-        Entity,
-        Mut<Snake>,
-        Option<Mut<GravityFall>>,
-        Option<&SelectedSnake>,
-    )> = query.iter_mut().collect();
-
-    sorted_snakes.sort_by_key(|(_, _, _, selected_snake)| selected_snake.is_none());
-
-    for (snake_entity, mut snake, gravity_fall, _) in sorted_snakes.into_iter() {
+    mut query: Query<(Entity, &mut MovableType, Option<&mut GravityFall>), Filter>,
+) where
+    MovableType: Component + Movable,
+    Filter: bevy::ecs::query::ReadOnlyWorldQuery,
+{
+    for (snake_entity, mut movable, gravity_fall) in &mut query {
         if snake_reach_goal_event
             .iter()
             .any(|event| event.0 == snake_entity)
@@ -494,26 +499,26 @@ pub fn gravity_system(
                 }
 
                 // Check if we fell on spikes, if, so trigger undo.
-                for (position, _) in snake.parts() {
-                    if !level.is_spike(*position) {
-                        continue;
-                    }
+                // for position in snake.positions() {
+                //     if !level.is_spike(position) {
+                //         continue;
+                //     }
 
-                    let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.stop_falling_on_spikes(snake_entity);
+                //     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
+                //     snake_commands.stop_falling_on_spikes(snake_entity);
 
-                    commands.entity(snake_entity).remove::<GravityFall>();
+                //     commands.entity(snake_entity).remove::<GravityFall>();
 
-                    trigger_undo_event.send(UndoEvent);
-                    return;
-                }
+                //     trigger_undo_event.send(UndoEvent);
+                //     return;
+                // }
 
                 // keep falling..
-                if min_distance_to_ground(&level, &snake, snake_entity) > 1 {
+                if min_distance_to_ground(&level, &movable.positions(), snake_entity) > 1 {
                     gravity_fall.relative_z = 1.0;
                     gravity_fall.grid_distance += 1;
 
-                    snake.fall_one_unit();
+                    movable.translate(IVec3::NEG_Y);
                 } else {
                     // ..or stop falling animation.
                     commands.entity(snake_entity).remove::<GravityFall>();
@@ -524,17 +529,24 @@ pub fn gravity_system(
                     }
 
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.stop_falling(snake.as_ref(), snake_entity);
+                    snake_commands.stop_falling(
+                        movable.as_ref(),
+                        LevelGridEntity::new(snake_entity, movable.entity_type()),
+                    );
                 }
             }
             None => {
                 // Check if snake is on the ground and spawn gravity fall if not.
-                let min_distance_to_ground = min_distance_to_ground(&level, &snake, snake_entity);
+                let min_distance_to_ground =
+                    min_distance_to_ground(&level, &movable.positions(), snake_entity);
                 if min_distance_to_ground > 1 {
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.start_falling(snake.as_ref(), snake_entity);
+                    snake_commands.start_falling(
+                        movable.as_ref(),
+                        LevelGridEntity::new(snake_entity, movable.entity_type()),
+                    );
 
-                    snake.fall_one_unit();
+                    movable.translate(IVec3::NEG_Y);
 
                     commands.entity(snake_entity).insert(GravityFall {
                         velocity: 0.0,

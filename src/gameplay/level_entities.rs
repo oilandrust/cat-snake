@@ -36,6 +36,10 @@ pub trait Movable {
     fn positions(&self) -> Vec<IVec3>;
 
     fn translate(&mut self, offset: IVec3);
+
+    fn set_positions(&mut self, positions: &[IVec3]);
+
+    fn entity_type(&self) -> EntityType;
 }
 
 impl Movable for GridEntity {
@@ -45,6 +49,14 @@ impl Movable for GridEntity {
 
     fn translate(&mut self, offset: IVec3) {
         self.0 += offset;
+    }
+
+    fn set_positions(&mut self, positions: &[IVec3]) {
+        self.0 = positions[0];
+    }
+
+    fn entity_type(&self) -> EntityType {
+        EntityType::Box
     }
 }
 
@@ -157,7 +169,7 @@ pub fn spawn_goal(
 impl<'a> MaterialMeshBuilder<'a> {
     pub fn build_box_mesh(&mut self, position: IVec3) -> PbrBundle {
         PbrBundle {
-            mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.5 })),
+            mesh: self.meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
             material: self.materials.add(Color::BEIGE.into()),
             transform: Transform::from_translation(position.as_vec3()),
             ..default()

@@ -173,23 +173,23 @@ impl LevelInstance {
         vec![LevelEntityUpdateEvent::FillPosition(new_part_position)]
     }
 
-    pub fn clear_snake_positions(&mut self, snake: &Snake) -> Vec<LevelEntityUpdateEvent> {
-        let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(snake.len());
-        for (position, _) in snake.parts() {
+    pub fn clear_posisitons(&mut self, positions: &[IVec3]) -> Vec<LevelEntityUpdateEvent> {
+        let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(positions.len());
+        for position in positions {
             let old_value = self.set_empty(*position).unwrap();
             updates.push(LevelEntityUpdateEvent::ClearPosition(*position, old_value));
         }
         updates
     }
 
-    pub fn mark_snake_positions(
+    pub fn mark_entity_positions(
         &mut self,
-        snake: &Snake,
-        entity: Entity,
+        positions: &[IVec3],
+        entity: LevelGridEntity,
     ) -> Vec<LevelEntityUpdateEvent> {
-        let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(snake.len());
-        for (position, _) in snake.parts() {
-            self.mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Snake));
+        let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(positions.len());
+        for position in positions {
+            self.mark_position_occupied(*position, entity);
             updates.push(LevelEntityUpdateEvent::FillPosition(*position));
         }
         updates
