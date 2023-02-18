@@ -3,24 +3,49 @@ use std::collections::VecDeque;
 use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb, utils::HashMap};
 
 use crate::{
-    gameplay::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent},
+    gameplay::{level_entities::Movable, snake_pluggin::Snake, undo::LevelEntityUpdateEvent},
     utils::ray_intersects_aabb,
 };
 use bevy_prototype_debug_lines::DebugShapes;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
-pub enum LevelEntityType {
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum EntityType {
     Food,
     Spike,
-    #[default]
     Wall,
-    Snake(i32),
+    Box,
+    Snake,
     Goal,
+}
+
+impl EntityType {
+    pub fn is_movable(&self) -> bool {
+        *self == EntityType::Snake || *self == EntityType::Box
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct LevelGridEntity {
+    pub entity: Entity,
+    pub entity_type: EntityType,
+}
+
+impl LevelGridEntity {
+    pub fn new(entity: Entity, entity_type: EntityType) -> Self {
+        LevelGridEntity {
+            entity,
+            entity_type,
+        }
+    }
+
+    pub fn is_movable(&self) -> bool {
+        self.entity_type.is_movable()
+    }
 }
 
 #[derive(Resource)]
 pub struct LevelInstance {
-    occupied_cells: HashMap<IVec3, LevelEntityType>,
+    occupied_cells: HashMap<IVec3, LevelGridEntity>,
 }
 
 impl LevelInstance {
@@ -38,38 +63,45 @@ impl LevelInstance {
         !self.occupied_cells.contains_key(&position) || self.is_spike(position)
     }
 
-    pub fn set_empty(&mut self, position: IVec3) -> Option<LevelEntityType> {
+    pub fn set_empty(&mut self, position: IVec3) -> Option<LevelGridEntity> {
         self.occupied_cells.remove(&position)
     }
 
-    pub fn mark_position_occupied(&mut self, position: IVec3, value: LevelEntityType) {
+    pub fn mark_position_occupied(&mut self, position: IVec3, value: LevelGridEntity) {
         self.occupied_cells.insert(position, value);
     }
 
     pub fn is_food(&self, position: IVec3) -> bool {
-        matches!(
-            self.occupied_cells.get(&position),
-            Some(LevelEntityType::Food)
-        )
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            None => false,
+            Some(entity) => entity.entity_type == EntityType::Food,
+        }
     }
 
-    pub fn get(&self, position: IVec3) -> Option<&LevelEntityType> {
+    pub fn get(&self, position: IVec3) -> Option<&LevelGridEntity> {
         self.occupied_cells.get(&position)
     }
 
     pub fn is_spike(&self, position: IVec3) -> bool {
-        matches!(
-            self.occupied_cells.get(&position),
-            Some(LevelEntityType::Spike)
-        )
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            None => false,
+            Some(entity) => entity.entity_type == EntityType::Spike,
+        }
     }
 
-    pub fn is_snake(&self, position: IVec3) -> Option<i32> {
-        let walkable = self.occupied_cells.get(&position);
-        match walkable {
-            Some(LevelEntityType::Snake(index)) => Some(*index),
-            _ => None,
+    pub fn is_entity(&self, position: IVec3, entity: Entity) -> bool {
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            None => false,
+            Some(cell_entity) => cell_entity.entity == entity,
         }
+    }
+
+    pub fn is_movable(&self, position: IVec3) -> Option<LevelGridEntity> {
+        let cell = self.occupied_cells.get(&position);
+        cell.copied().filter(|entity| entity.is_movable())
     }
 
     /// Move a snake forward.
@@ -78,13 +110,17 @@ impl LevelInstance {
     pub fn move_snake_forward(
         &mut self,
         snake: &Snake,
+        entity: Entity,
         direction: IVec3,
     ) -> Vec<LevelEntityUpdateEvent> {
         let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(2);
         let new_position = snake.head_position() + direction;
 
         let old_value = self.set_empty(snake.tail_position()).unwrap();
-        self.mark_position_occupied(new_position, LevelEntityType::Snake(snake.index()));
+        self.mark_position_occupied(
+            new_position,
+            LevelGridEntity::new(entity, EntityType::Snake),
+        );
 
         updates.push(LevelEntityUpdateEvent::ClearPosition(
             snake.tail_position(),
@@ -98,17 +134,23 @@ impl LevelInstance {
     /// Move a snake by an offset:
     /// Set the old locations are empty and mark the new locations as occupied.
     /// Returns a list of updates to the walkable cells that can be undone.
-    pub fn move_snake(&mut self, snake: &Snake, offset: IVec3) -> Vec<LevelEntityUpdateEvent> {
+    pub fn move_entity(
+        &mut self,
+        movable: &dyn Movable,
+        entity: LevelGridEntity,
+        offset: IVec3,
+    ) -> Vec<LevelEntityUpdateEvent> {
+        let positions = movable.positions();
         let mut updates: VecDeque<LevelEntityUpdateEvent> =
-            VecDeque::with_capacity(2 * snake.len());
+            VecDeque::with_capacity(2 * positions.len());
 
-        for (position, _) in snake.parts() {
+        for position in &positions {
             let old_value = self.set_empty(*position).unwrap();
             updates.push_front(LevelEntityUpdateEvent::ClearPosition(*position, old_value));
         }
-        for (position, _) in snake.parts() {
+        for position in &positions {
             let new_position = *position + offset;
-            self.mark_position_occupied(new_position, LevelEntityType::Snake(snake.index()));
+            self.mark_position_occupied(new_position, entity);
             updates.push_front(LevelEntityUpdateEvent::FillPosition(new_position));
         }
 
@@ -120,11 +162,14 @@ impl LevelInstance {
         vec![LevelEntityUpdateEvent::ClearPosition(position, old_value)]
     }
 
-    pub fn grow_snake(&mut self, snake: &Snake) -> Vec<LevelEntityUpdateEvent> {
+    pub fn grow_snake(&mut self, snake: &Snake, entity: Entity) -> Vec<LevelEntityUpdateEvent> {
         let (tail_position, tail_direction) = snake.tail();
         let new_part_position = tail_position - tail_direction;
 
-        self.mark_position_occupied(new_part_position, LevelEntityType::Snake(snake.index()));
+        self.mark_position_occupied(
+            new_part_position,
+            LevelGridEntity::new(entity, EntityType::Snake),
+        );
         vec![LevelEntityUpdateEvent::FillPosition(new_part_position)]
     }
 
@@ -137,10 +182,14 @@ impl LevelInstance {
         updates
     }
 
-    pub fn mark_snake_positions(&mut self, snake: &Snake) -> Vec<LevelEntityUpdateEvent> {
+    pub fn mark_snake_positions(
+        &mut self,
+        snake: &Snake,
+        entity: Entity,
+    ) -> Vec<LevelEntityUpdateEvent> {
         let mut updates: Vec<LevelEntityUpdateEvent> = Vec::with_capacity(snake.len());
         for (position, _) in snake.parts() {
-            self.mark_position_occupied(*position, LevelEntityType::Snake(snake.index()));
+            self.mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Snake));
             updates.push(LevelEntityUpdateEvent::FillPosition(*position));
         }
         updates
@@ -159,39 +208,42 @@ impl LevelInstance {
         }
     }
 
-    pub fn can_push_snake(&self, snake: &Snake, direction: IVec3) -> bool {
-        snake.parts().iter().all(|(position, _)| {
+    pub fn can_push_entity(
+        &self,
+        entity: Entity,
+        entity_positions: &[IVec3],
+        direction: IVec3,
+    ) -> bool {
+        entity_positions.iter().all(|position| {
             self.is_empty(*position + direction)
-                || self.is_snake_with_index(*position + direction, snake.index())
+                || self.is_entity_with_index(*position + direction, entity)
         })
     }
 
-    pub fn is_snake_with_index(&self, position: IVec3, snake_index: i32) -> bool {
+    pub fn is_entity_with_index(&self, position: IVec3, entity: Entity) -> bool {
         let walkable = self.occupied_cells.get(&position);
         match walkable {
-            Some(LevelEntityType::Snake(index)) => *index == snake_index,
+            Some(grid_entity) => grid_entity.entity == entity,
             _ => false,
         }
     }
 
-    pub fn is_wall_or_spike(&self, position: IVec3) -> bool {
-        matches!(
-            self.occupied_cells.get(&position),
-            Some(LevelEntityType::Wall)
-        ) || matches!(
-            self.occupied_cells.get(&position),
-            Some(LevelEntityType::Spike)
-        )
+    pub fn can_walk_or_eat(&self, position: IVec3) -> bool {
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            Some(entity) => !entity.is_movable() && entity.entity_type != EntityType::Food,
+            None => false,
+        }
     }
 
-    pub fn get_distance_to_ground(&self, position: IVec3, snake_index: i32) -> i32 {
+    pub fn get_distance_to_ground(&self, position: IVec3, snake_entity: Entity) -> i32 {
         let mut distance = 1;
 
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
         let mut current_position = position + IVec3::NEG_Y;
         while self.is_empty_or_spike(current_position)
-            || self.is_snake_with_index(current_position, snake_index)
+            || self.is_entity(current_position, snake_entity)
         {
             current_position += IVec3::NEG_Y;
             distance += 1;

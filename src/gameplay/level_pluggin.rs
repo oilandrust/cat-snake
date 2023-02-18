@@ -284,6 +284,15 @@ pub fn spawn_level_entities_system(
         );
     }
 
+    for position in &level_template.boxes {
+        spawn_box(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+        );
+    }
+
     if let Some(goal_position) = level_template.goal {
         spawn_goal(&mut mesh_builder, &mut commands, &goal_position);
     };

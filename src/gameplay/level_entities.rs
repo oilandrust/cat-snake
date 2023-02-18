@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    level::level_instance::{LevelEntityType, LevelInstance},
+    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
     tools::picking::PickableBundle,
     GameAssets,
 };
@@ -11,7 +11,7 @@ use super::{
     snake_pluggin::MaterialMeshBuilder,
 };
 
-#[derive(Component, Reflect)]
+#[derive(Component)]
 pub struct LevelEntity;
 
 #[derive(Component, Clone, Copy)]
@@ -29,20 +29,42 @@ pub struct Spike;
 #[derive(Component, Clone, Copy)]
 pub struct Goal;
 
+#[derive(Component, Clone, Copy)]
+pub struct Box;
+
+pub trait Movable {
+    fn positions(&self) -> Vec<IVec3>;
+
+    fn translate(&mut self, offset: IVec3);
+}
+
+impl Movable for GridEntity {
+    fn positions(&self) -> Vec<IVec3> {
+        vec![self.0]
+    }
+
+    fn translate(&mut self, offset: IVec3) {
+        self.0 += offset;
+    }
+}
+
 pub fn spawn_spike(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
 ) {
-    commands.spawn((
-        mesh_builder.build_spike_mesh(*position),
-        GridEntity(*position),
-        Spike,
-        LevelEntity,
-    ));
+    let entity = commands
+        .spawn((
+            mesh_builder.build_spike_mesh(*position),
+            GridEntity(*position),
+            Spike,
+            LevelEntity,
+        ))
+        .id();
 
-    level_instance.mark_position_occupied(*position, LevelEntityType::Spike);
+    level_instance
+        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Spike));
 }
 
 pub fn spawn_wall(
@@ -58,22 +80,25 @@ pub fn spawn_wall(
         ..default()
     });
 
-    commands.spawn((
-        PbrBundle {
-            mesh: mesh_builder
-                .meshes
-                .add(Mesh::from(shape::Cube { size: 1.0 })),
-            material: ground_material,
-            transform: Transform::from_translation(position.as_vec3()),
-            ..default()
-        },
-        LevelEntity,
-        GridEntity(*position),
-        Wall,
-        PickableBundle::default(),
-    ));
+    let entity = commands
+        .spawn((
+            PbrBundle {
+                mesh: mesh_builder
+                    .meshes
+                    .add(Mesh::from(shape::Cube { size: 1.0 })),
+                material: ground_material,
+                transform: Transform::from_translation(position.as_vec3()),
+                ..default()
+            },
+            LevelEntity,
+            GridEntity(*position),
+            Wall,
+            PickableBundle::default(),
+        ))
+        .id();
 
-    level_instance.mark_position_occupied(*position, LevelEntityType::Wall);
+    level_instance
+        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Wall));
 }
 
 pub fn spawn_food(
@@ -82,15 +107,37 @@ pub fn spawn_food(
     position: &IVec3,
     level_instance: &mut LevelInstance,
 ) {
-    commands.spawn((
-        mesh_builder.build_food_mesh(*position),
-        GridEntity(*position),
-        Food,
-        LevelEntity,
-        PickableBundle::default(),
-    ));
+    let entity = commands
+        .spawn((
+            mesh_builder.build_food_mesh(*position),
+            GridEntity(*position),
+            Food,
+            LevelEntity,
+            PickableBundle::default(),
+        ))
+        .id();
 
-    level_instance.mark_position_occupied(*position, LevelEntityType::Food);
+    level_instance
+        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Food));
+}
+
+pub fn spawn_box(
+    mesh_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    position: &IVec3,
+    level_instance: &mut LevelInstance,
+) {
+    let entity = commands
+        .spawn((
+            mesh_builder.build_box_mesh(*position),
+            GridEntity(*position),
+            Box,
+            LevelEntity,
+            PickableBundle::default(),
+        ))
+        .id();
+
+    level_instance.mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Box));
 }
 
 pub fn spawn_goal(
@@ -108,6 +155,15 @@ pub fn spawn_goal(
 }
 
 impl<'a> MaterialMeshBuilder<'a> {
+    pub fn build_box_mesh(&mut self, position: IVec3) -> PbrBundle {
+        PbrBundle {
+            mesh: self.meshes.add(Mesh::from(shape::Cube { size: 0.5 })),
+            material: self.materials.add(Color::BEIGE.into()),
+            transform: Transform::from_translation(position.as_vec3()),
+            ..default()
+        }
+    }
+
     pub fn build_food_mesh(&mut self, position: IVec3) -> PbrBundle {
         PbrBundle {
             mesh: self.meshes.add(Mesh::from(shape::Icosphere {

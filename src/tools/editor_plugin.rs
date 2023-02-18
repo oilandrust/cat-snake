@@ -22,7 +22,7 @@ use crate::{
         },
     },
     level::{
-        level_instance::{LevelEntityType, LevelInstance},
+        level_instance::{EntityType, LevelInstance},
         level_template::{LevelTemplate, LoadedLevel, LoadingLevel},
     },
     tools::{
@@ -40,9 +40,17 @@ use super::{
 
 pub struct EditorPlugin;
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 struct EditorState {
-    insert_entity_type: LevelEntityType,
+    insert_entity_type: EntityType,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        Self {
+            insert_entity_type: EntityType::Wall,
+        }
+    }
 }
 
 impl Plugin for EditorPlugin {
@@ -143,13 +151,15 @@ fn choose_entity_to_add_system(
     mut editor_state: ResMut<EditorState>,
 ) {
     if keyboard.just_pressed(KeyCode::G) {
-        editor_state.insert_entity_type = LevelEntityType::Goal;
+        editor_state.insert_entity_type = EntityType::Goal;
     } else if keyboard.just_pressed(KeyCode::F) {
-        editor_state.insert_entity_type = LevelEntityType::Food;
+        editor_state.insert_entity_type = EntityType::Food;
     } else if keyboard.just_pressed(KeyCode::H) {
-        editor_state.insert_entity_type = LevelEntityType::Wall;
+        editor_state.insert_entity_type = EntityType::Wall;
     } else if keyboard.just_pressed(KeyCode::K) {
-        editor_state.insert_entity_type = LevelEntityType::Spike;
+        editor_state.insert_entity_type = EntityType::Spike;
+    } else if keyboard.just_pressed(KeyCode::B) {
+        editor_state.insert_entity_type = EntityType::Box;
     }
 }
 
@@ -189,7 +199,7 @@ fn add_entity_on_click_system(
     };
 
     match editor_state.insert_entity_type {
-        LevelEntityType::Food => {
+        EntityType::Food => {
             spawn_food(
                 &mut mesh_builder,
                 &mut commands,
@@ -197,7 +207,7 @@ fn add_entity_on_click_system(
                 &mut level_instance,
             );
         }
-        LevelEntityType::Spike => {
+        EntityType::Spike => {
             spawn_spike(
                 &mut mesh_builder,
                 &mut commands,
@@ -205,7 +215,7 @@ fn add_entity_on_click_system(
                 &mut level_instance,
             );
         }
-        LevelEntityType::Wall => {
+        EntityType::Wall => {
             spawn_wall(
                 &mut mesh_builder,
                 &mut commands,
@@ -214,8 +224,16 @@ fn add_entity_on_click_system(
                 assets.as_ref(),
             );
         }
-        LevelEntityType::Snake(_) => {}
-        LevelEntityType::Goal => {
+        EntityType::Box => {
+            spawn_box(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+            );
+        }
+        EntityType::Snake => {}
+        EntityType::Goal => {
             spawn_goal(&mut mesh_builder, &mut commands, &position);
         }
     }
@@ -341,6 +359,7 @@ fn create_new_level_system(
     spawn_snake_event.send(SpawnSnakeEvent);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn save_level_system(
     keyboard: Res<Input<KeyCode>>,
     current_level_asset_path: Res<CurrentLevelAssetPath>,
@@ -348,6 +367,7 @@ fn save_level_system(
     walls_query: Query<&GridEntity, With<Wall>>,
     foods_query: Query<&GridEntity, With<Food>>,
     spikes_query: Query<&GridEntity, With<Spike>>,
+    boxes_query: Query<&GridEntity, With<Box>>,
     goal_query: Query<&GridEntity, With<Goal>>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
@@ -362,6 +382,7 @@ fn save_level_system(
         foods: foods_query.into_iter().map(|entity| entity.0).collect(),
         spikes: spikes_query.into_iter().map(|entity| entity.0).collect(),
         walls: walls_query.into_iter().map(|entity| entity.0).collect(),
+        boxes: boxes_query.into_iter().map(|entity| entity.0).collect(),
         goal: goal_query.get_single().map(|entity| entity.0).ok(),
     };
 

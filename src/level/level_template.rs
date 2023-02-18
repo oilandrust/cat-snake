@@ -16,6 +16,7 @@ pub struct LevelTemplate {
     pub foods: Vec<IVec3>,
     pub walls: Vec<IVec3>,
     pub spikes: Vec<IVec3>,
+    pub boxes: Vec<IVec3>,
     pub goal: Option<IVec3>,
 }
 

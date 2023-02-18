@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 use bevy_kira_audio::{Audio, AudioControl};
 use bevy_tweening::{
     component_animator_system, AnimationSystem, Animator, EaseFunction, Lens, Tween,
@@ -11,7 +11,7 @@ use crate::{
     gameplay::game_constants_pluggin::*,
     gameplay::snake_pluggin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::level_instance::LevelInstance,
+    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
     GameAssets, GameState,
 };
 
@@ -157,11 +157,11 @@ impl Plugin for MovementPluggin {
     }
 }
 
-fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
+fn min_distance_to_ground(level: &LevelInstance, snake: &Snake, snake_entity: Entity) -> i32 {
     snake
         .parts()
         .iter()
-        .map(|(position, _)| level.get_distance_to_ground(*position, snake.index()))
+        .map(|(position, _)| level.get_distance_to_ground(*position, snake_entity))
         .min()
         .unwrap()
 }
@@ -203,22 +203,82 @@ type WithMovementControlSystemFilter = (
 fn snake_can_move_forward(
     level_instance: &LevelInstance,
     snake: &Snake,
-    other_snake: &Option<Mut<Snake>>,
+    other_entity: &Option<(Entity, &dyn Movable)>,
     direction: IVec3,
 ) -> bool {
     let new_position = snake.head_position() + direction;
 
-    if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
+    if snake.occupies_position(new_position) || level_instance.can_walk_or_eat(new_position) {
         return false;
     }
 
-    if let Some(other_snake) = &other_snake {
-        if !level_instance.can_push_snake(other_snake.as_ref(), direction) {
+    if let Some(other_entity) = &other_entity {
+        if !level_instance.can_push_entity(other_entity.0, &other_entity.1.positions(), direction) {
             return false;
         }
     };
 
     true
+}
+
+struct MovableRegistry<'a> {
+    snake_registry: HashMap<Entity, Mut<'a, Snake>>,
+    box_registry: HashMap<Entity, Mut<'a, GridEntity>>,
+}
+
+impl<'a> MovableRegistry<'a> {
+    pub fn new(
+        snake_query: &'a mut Query<(Entity, &mut Snake), Without<SelectedSnake>>,
+        box_query: &'a mut Query<(Entity, &mut GridEntity), (With<Box>, Without<Food>)>,
+    ) -> Self {
+        let mut snake_registry: HashMap<Entity, Mut<Snake>> = HashMap::new();
+        for (entity, snake) in &mut *snake_query {
+            snake_registry.insert(entity, snake);
+        }
+        let mut box_registry: HashMap<Entity, Mut<GridEntity>> = HashMap::new();
+        for (entity, movable) in &mut *box_query {
+            box_registry.insert(entity, movable);
+        }
+
+        Self {
+            snake_registry,
+            box_registry,
+        }
+    }
+
+    pub fn get(&mut self, entity: &LevelGridEntity) -> &dyn Movable {
+        match entity.entity_type {
+            EntityType::Box => self.box_registry.get(&entity.entity).expect("msg").as_ref(),
+            EntityType::Snake => self
+                .snake_registry
+                .get(&entity.entity)
+                .expect("msg")
+                .as_ref(),
+            _ => panic!("Should not happen"),
+        }
+    }
+
+    pub fn get_mut(&mut self, entity: &LevelGridEntity) -> &mut dyn Movable {
+        match entity.entity_type {
+            EntityType::Box => {
+                let movable_ref: &mut dyn Movable = self
+                    .box_registry
+                    .get_mut(&entity.entity)
+                    .expect("msg")
+                    .as_mut();
+                movable_ref
+            }
+            EntityType::Snake => {
+                let movable_ref: &mut dyn Movable = self
+                    .snake_registry
+                    .get_mut(&entity.entity)
+                    .expect("msg")
+                    .as_mut();
+                movable_ref
+            }
+            _ => panic!("Should not happen"),
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -234,8 +294,9 @@ pub fn snake_movement_control_system(
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
-    foods_query: Query<&GridEntity, With<Food>>,
-    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
+    mut boxes_query: Query<(Entity, &mut GridEntity), (With<Box>, Without<Food>)>,
+    foods_query: Query<&GridEntity, (With<Food>, Without<Box>)>,
+    goal_query: Query<&GridEntity, (With<Goal>, With<Active>, Without<Box>, Without<Food>)>,
 ) {
     let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
         return;
@@ -244,6 +305,8 @@ pub fn snake_movement_control_system(
     let Some(MoveCommandEvent(direction)) = move_command_event.iter().next() else {
         return;
     };
+
+    let mut movable_registry = MovableRegistry::new(&mut other_snakes_query, &mut boxes_query);
 
     // We try to move with the input direction, if not possible try to go up.
     let directions = vec![*direction, IVec3::Y];
@@ -272,36 +335,23 @@ pub fn snake_movement_control_system(
                 break 'choose_direction None;
             }
 
-            // Find if there is a snake in the way.
-            let (other_snake_entity, other_snake) = level_instance
-                .is_snake(new_position)
-                .and_then(|other_snake_id| {
-                    other_snakes_query
-                        .iter_mut()
-                        .find(|(_, snake)| snake.index() == other_snake_id)
-                })
-                .unzip();
+            let movable_entity = level_instance.is_movable(new_position);
+
+            // Find if there is a movable entity in the way.
+            let movable =
+                movable_entity.map(|entity| (entity.entity, movable_registry.get(&entity)));
 
             // Check if we can move forward.
-            if snake_can_move_forward(&level_instance, &snake, &other_snake, direction) {
-                break 'choose_direction Some((
-                    direction,
-                    new_position,
-                    other_snake_entity,
-                    other_snake,
-                ));
+            if snake_can_move_forward(&level_instance, &snake, &movable, direction) {
+                break 'choose_direction Some((direction, new_position, movable_entity));
             }
         }
         None
     };
 
-    let Some((direction, new_position,
-        other_snake_entity,
-        mut other_snake)) = move_forward_or_up else {
+    let Some((direction, new_position, movable_entity)) = move_forward_or_up else {
         return;
     };
-
-    let other_snake = other_snake.as_mut().map(|some| some.as_mut());
 
     // Any food?
     let food = foods_query.iter().find(|food| food.0 == new_position);
@@ -309,9 +359,15 @@ pub fn snake_movement_control_system(
     // Finaly move the snake forward and commit the state.
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
 
+    let movable = if let Some(entity) = movable_entity {
+        Some((entity, movable_registry.get_mut(&entity)))
+    } else {
+        None
+    };
+
     snake_commands
-        .player_move(snake.as_mut(), direction)
-        .pushing_snake(other_snake)
+        .player_move(snake.as_mut(), snake_entity, direction)
+        .pushing_entity(movable)
         .eating_food(food)
         .execute();
 
@@ -329,12 +385,14 @@ pub fn snake_movement_control_system(
         lerp_time: 0.0,
     });
 
-    if let Some(other_snake_entity) = other_snake_entity {
-        commands.entity(other_snake_entity).insert(PushedAnim {
-            direction: direction.as_vec3(),
-            velocity: constants.move_velocity,
-            lerp_time: 0.0,
-        });
+    if let Some(other_snake_entity) = movable_entity {
+        commands
+            .entity(other_snake_entity.entity)
+            .insert(PushedAnim {
+                direction: direction.as_vec3(),
+                velocity: constants.move_velocity,
+                lerp_time: 0.0,
+            });
     }
 
     audio
@@ -442,7 +500,7 @@ pub fn gravity_system(
                     }
 
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.stop_falling_on_spikes(snake.as_ref());
+                    snake_commands.stop_falling_on_spikes(snake_entity);
 
                     commands.entity(snake_entity).remove::<GravityFall>();
 
@@ -451,7 +509,7 @@ pub fn gravity_system(
                 }
 
                 // keep falling..
-                if min_distance_to_ground(&level, &snake) > 1 {
+                if min_distance_to_ground(&level, &snake, snake_entity) > 1 {
                     gravity_fall.relative_z = 1.0;
                     gravity_fall.grid_distance += 1;
 
@@ -466,15 +524,15 @@ pub fn gravity_system(
                     }
 
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.stop_falling(snake.as_ref());
+                    snake_commands.stop_falling(snake.as_ref(), snake_entity);
                 }
             }
             None => {
                 // Check if snake is on the ground and spawn gravity fall if not.
-                let min_distance_to_ground = min_distance_to_ground(&level, &snake);
+                let min_distance_to_ground = min_distance_to_ground(&level, &snake, snake_entity);
                 if min_distance_to_ground > 1 {
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.start_falling(snake.as_ref());
+                    snake_commands.start_falling(snake.as_ref(), snake_entity);
 
                     snake.fall_one_unit();
 

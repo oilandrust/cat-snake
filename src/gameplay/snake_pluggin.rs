@@ -8,12 +8,14 @@ use crate::{
     gameplay::level_entities::LevelEntity,
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
-    level::level_instance::{LevelEntityType, LevelInstance},
+    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
     utils::{ray_from_screen_space, ray_intersects_aabb},
     GameState,
 };
 
 use crate::level::level_template::{LevelTemplate, LoadedLevel};
+
+use super::level_entities::{GridEntity, Movable};
 
 pub struct SnakePluggin;
 
@@ -33,6 +35,12 @@ impl Plugin for SnakePluggin {
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 update_snake_transforms_system
+                    .run_in_state(GameState::Game)
+                    .before(TransformSystem::TransformPropagate),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                update_movable_transforms_system
                     .run_in_state(GameState::Game)
                     .before(TransformSystem::TransformPropagate),
             )
@@ -193,14 +201,24 @@ impl Snake {
         }
     }
 
-    pub fn translate(&mut self, offset: IVec3) {
+    pub fn set_parts(&mut self, parts: Vec<SnakeElement>) {
+        self.parts = parts.into();
+    }
+}
+
+impl Movable for Snake {
+    fn positions(&self) -> Vec<IVec3> {
+        self.parts
+            .iter()
+            .copied()
+            .map(|(position, _)| position)
+            .collect()
+    }
+
+    fn translate(&mut self, offset: IVec3) {
         for (position, _) in self.parts.iter_mut() {
             *position += offset;
         }
-    }
-
-    pub fn set_parts(&mut self, parts: Vec<SnakeElement>) {
-        self.parts = parts.into();
     }
 }
 
@@ -228,7 +246,10 @@ pub fn spawn_snake(
     });
 
     for (position, _) in snake_template {
-        level_instance.mark_position_occupied(*position, LevelEntityType::Snake(snake_index));
+        level_instance.mark_position_occupied(
+            *position,
+            LevelGridEntity::new(spawn_command.id(), EntityType::Snake),
+        );
     }
 
     spawn_command.id()
@@ -277,6 +298,17 @@ pub fn update_snake_transforms_system(
             part_transform.translation =
                 (element.0 - snake.head_position()).as_vec3() + move_offset;
         }
+    }
+}
+
+pub fn update_movable_transforms_system(
+    mut moving_entitites: Query<(&GridEntity, &mut Transform, &PushedAnim)>,
+) {
+    for (grid_entity, mut transform, pushed_anim) in &mut moving_entitites {
+        let initial_offset = -pushed_anim.direction;
+        let push_offset = initial_offset.lerp(Vec3::ZERO, pushed_anim.lerp_time);
+
+        transform.translation = grid_entity.0.as_vec3() + push_offset;
     }
 }
 
@@ -390,7 +422,7 @@ pub fn respawn_snake_on_fall_system(
         }
 
         let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-        snake_commands.stop_falling(snake);
+        snake_commands.stop_falling(snake, snake_entity);
 
         commands.entity(snake_entity).remove::<GravityFall>();
 
