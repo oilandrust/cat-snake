@@ -59,8 +59,12 @@ impl Plugin for EditorPlugin {
             .add_plugin(FlycamPlugin)
             .insert_resource(EditorState::default())
             .add_system(start_editor_system.run_in_state(GameState::Game))
-            .add_system(stop_editor_system.run_in_state(GameState::Editor))
             .add_enter_system(GameState::Editor, init_level_instance_system)
+            .add_enter_system(
+                GameState::Editor,
+                create_new_level_on_enter_system
+                    .run_unless_resource_exists::<CurrentLevelAssetPath>(),
+            )
             .add_exit_system(GameState::Editor, despawn_with::<LevelEntity>)
             .add_exit_system(GameState::Editor, clear_level_runtime_resources_system)
             .add_system_set(
@@ -78,9 +82,16 @@ impl Plugin for EditorPlugin {
                     .with_system(add_entity_on_click_system)
                     .with_system(delete_selected_wall_system)
                     .with_system(create_new_level_system)
-                    .with_system(save_level_system)
                     .with_system(update_snake_transforms_system)
                     .with_system(move_selected_grid_entity)
+                    .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Editor)
+                    .run_if_resource_exists::<CurrentLevelAssetPath>()
+                    .with_system(save_level_system)
+                    .with_system(stop_editor_system)
                     .into(),
             );
     }
@@ -160,6 +171,8 @@ fn choose_entity_to_add_system(
         editor_state.insert_entity_type = EntityType::Spike;
     } else if keyboard.just_pressed(KeyCode::B) {
         editor_state.insert_entity_type = EntityType::Box;
+    } else if keyboard.just_pressed(KeyCode::T) {
+        editor_state.insert_entity_type = EntityType::Trigger;
     }
 }
 
@@ -232,9 +245,22 @@ fn add_entity_on_click_system(
                 &mut level_instance,
             );
         }
+        EntityType::Trigger => {
+            spawn_trigger(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+            );
+        }
         EntityType::Snake => {}
         EntityType::Goal => {
-            spawn_goal(&mut mesh_builder, &mut commands, &position);
+            spawn_goal(
+                &mut mesh_builder,
+                &mut commands,
+                &position,
+                &mut level_instance,
+            );
         }
     }
 }
@@ -330,6 +356,31 @@ fn delete_selected_wall_system(
     }
 }
 
+fn create_new_level_on_enter_system(
+    mut level_loaded_event: EventWriter<LevelLoadedEvent>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    mut levels: ResMut<Assets<LevelTemplate>>,
+    mut commands: Commands,
+    entities: Query<Entity, With<LevelEntity>>,
+) {
+    despawn_entities::<LevelEntity>(&mut commands, entities);
+
+    let mut walls = Vec::with_capacity(10 * 10);
+    for j in -5..5 {
+        for i in -5..5 {
+            walls.push(IVec3::new(i, 0, j));
+        }
+    }
+
+    let new_tempale = LevelTemplate { walls, ..default() };
+
+    commands.insert_resource(CurrentLevelAssetPath("levels/new.lvl".to_owned()));
+    commands.insert_resource(LoadedLevel(levels.add(new_tempale)));
+    commands.insert_resource(LevelInstance::new());
+    level_loaded_event.send(LevelLoadedEvent);
+    spawn_snake_event.send(SpawnSnakeEvent);
+}
+
 fn create_new_level_system(
     keyboard: Res<Input<KeyCode>>,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
@@ -368,6 +419,7 @@ fn save_level_system(
     foods_query: Query<&GridEntity, With<Food>>,
     spikes_query: Query<&GridEntity, With<Spike>>,
     boxes_query: Query<&GridEntity, With<Box>>,
+    triggers_query: Query<&GridEntity, With<Trigger>>,
     goal_query: Query<&GridEntity, With<Goal>>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
@@ -383,6 +435,7 @@ fn save_level_system(
         spikes: spikes_query.into_iter().map(|entity| entity.0).collect(),
         walls: walls_query.into_iter().map(|entity| entity.0).collect(),
         boxes: boxes_query.into_iter().map(|entity| entity.0).collect(),
+        triggers: triggers_query.into_iter().map(|entity| entity.0).collect(),
         goal: goal_query.get_single().map(|entity| entity.0).ok(),
     };
 

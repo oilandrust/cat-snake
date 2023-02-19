@@ -32,4 +32,5 @@ pub enum Commands {
         #[arg(short, long)]
         test_case: Option<usize>,
     },
+    Editor,
 }

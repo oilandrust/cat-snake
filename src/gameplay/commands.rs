@@ -95,7 +95,7 @@ impl<'a> SnakeCommands<'a> {
         }
     }
 
-    pub fn stop_falling_on_spikes(&mut self, entity: Entity) {
+    pub fn _stop_falling_on_spikes(&mut self, entity: Entity) {
         // Stop fall can happen a long time after beggin fall, and other actions can be done in between.
         // We find the corresponding beggin fall and add the undo info to it so that both can be undone at the same time.
         let begin_fall = self

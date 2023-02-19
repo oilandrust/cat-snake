@@ -18,7 +18,7 @@ use super::{
     commands::SnakeCommands,
     level_entities::*,
     movement_pluggin::{GravityFall, SnakeReachGoalEvent},
-    movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
+    movement_pluggin::{LevelExitAnim, MovementStages, SnakeExitedLevelEvent},
     snake_pluggin::MaterialMeshBuilder,
     snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     undo::SnakeHistory,
@@ -78,32 +78,40 @@ impl Plugin for LevelPluggin {
                 CoreStage::PreUpdate,
                 spawn_level_entities_system
                     .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LoadedLevel>()
                     .run_if_resource_exists::<LevelInstance>()
                     .after(LevelStages::PreloadLevel),
             )
+            // .add_system_to_stage(
+            //     CoreStage::PostUpdate,
+            //     activate_goal_when_all_food_eaten_system
+            //         .run_in_state(GameState::Game)
+            //         .run_if_resource_exists::<LevelInstance>()
+            //         .label(LevelStages::CheckLevelCondition),
+            // )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                activate_goal_when_all_food_eaten_system
+                activate_goal_when_trigger_pressed_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(LevelStages::CheckLevelCondition),
+                    .label(MovementStages::SmoothMovement),
             )
             .add_system_to_stage(
-                CoreStage::PostUpdate,
+                CoreStage::Last,
                 check_for_level_completion_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
                     .label(LevelStages::CheckLevelCondition),
             )
             .add_system_to_stage(
-                CoreStage::PostUpdate,
+                CoreStage::Update,
                 start_snake_exit_level_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
                     .after(LevelStages::CheckLevelCondition),
             )
             .add_system_to_stage(
-                CoreStage::PostUpdate,
+                CoreStage::Update,
                 finish_snake_exit_level_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>(),
@@ -303,8 +311,22 @@ pub fn spawn_level_entities_system(
         );
     }
 
+    for position in &level_template.triggers {
+        spawn_trigger(
+            &mut mesh_builder,
+            &mut commands,
+            position,
+            &mut level_instance,
+        );
+    }
+
     if let Some(goal_position) = level_template.goal {
-        spawn_goal(&mut mesh_builder, &mut commands, &goal_position);
+        spawn_goal(
+            &mut mesh_builder,
+            &mut commands,
+            &goal_position,
+            &mut level_instance,
+        );
     };
 }
 
@@ -325,7 +347,7 @@ pub fn clear_level_system(
     commands.remove_resource::<SnakeHistory>();
 }
 
-fn activate_goal_when_all_food_eaten_system(
+fn _activate_goal_when_all_food_eaten_system(
     mut commands: Commands,
     food_query: Query<&Food>,
     goal_query: Query<(Entity, Option<&Active>), With<Goal>>,
@@ -335,6 +357,24 @@ fn activate_goal_when_all_food_eaten_system(
     };
 
     if food_query.is_empty() {
+        if active.is_none() {
+            commands.entity(goal_entity).insert(Active);
+        }
+    } else if active.is_some() {
+        commands.entity(goal_entity).remove::<Active>();
+    }
+}
+
+fn activate_goal_when_trigger_pressed_system(
+    mut commands: Commands,
+    triggers_query: Query<&Trigger, Without<Active>>,
+    goal_query: Query<(Entity, Option<&Active>), With<Goal>>,
+) {
+    let Ok((goal_entity, active)) = goal_query.get_single() else {
+        return;
+    };
+
+    if triggers_query.is_empty() {
         if active.is_none() {
             commands.entity(goal_entity).insert(Active);
         }

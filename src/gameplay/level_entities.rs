@@ -34,6 +34,9 @@ pub struct Goal;
 #[derive(Component, Clone, Copy)]
 pub struct Box;
 
+#[derive(Component, Clone, Copy)]
+pub struct Trigger;
+
 pub trait Movable {
     fn positions(&self) -> &[IVec3];
 
@@ -158,14 +161,40 @@ pub fn spawn_goal(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
+    level_instance: &mut LevelInstance,
 ) {
-    commands.spawn((
-        mesh_builder.build_goal_mesh(*position),
-        GridEntity(*position),
-        Goal,
-        LevelEntity,
-        PickableBundle::default(),
-    ));
+    let entity = commands
+        .spawn((
+            mesh_builder.build_goal_mesh(*position),
+            GridEntity(*position),
+            Goal,
+            LevelEntity,
+            PickableBundle::default(),
+        ))
+        .id();
+
+    level_instance
+        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Goal));
+}
+
+pub fn spawn_trigger(
+    mesh_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    position: &IVec3,
+    level_instance: &mut LevelInstance,
+) {
+    let entity = commands
+        .spawn((
+            mesh_builder.build_trigger_mesh(*position),
+            GridEntity(*position),
+            Trigger,
+            LevelEntity,
+            PickableBundle::default(),
+        ))
+        .id();
+
+    level_instance
+        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Trigger));
 }
 
 impl<'a> MaterialMeshBuilder<'a> {
@@ -201,6 +230,22 @@ impl<'a> MaterialMeshBuilder<'a> {
                 max_z: 0.4,
             })),
             material: self.materials.add(Color::BLACK.into()),
+            transform: Transform::from_translation(position.as_vec3()),
+            ..default()
+        }
+    }
+
+    pub fn build_trigger_mesh(&mut self, position: IVec3) -> PbrBundle {
+        PbrBundle {
+            mesh: self.meshes.add(Mesh::from(shape::Box {
+                min_x: -0.45,
+                max_x: 0.45,
+                min_y: -0.5,
+                max_y: -0.3,
+                min_z: -0.45,
+                max_z: 0.45,
+            })),
+            material: self.materials.add(Color::GRAY.into()),
             transform: Transform::from_translation(position.as_vec3()),
             ..default()
         }

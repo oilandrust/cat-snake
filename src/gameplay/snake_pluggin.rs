@@ -29,6 +29,7 @@ impl Plugin for SnakePluggin {
                 CoreStage::PreUpdate,
                 spawn_snake_system
                     .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LoadedLevel>()
                     .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
@@ -236,12 +237,18 @@ impl Movable for Snake {
         for (position, _) in self.parts.iter_mut() {
             *position += offset;
         }
+
+        for position in self.positions.iter_mut() {
+            *position += offset;
+        }
     }
 
     fn set_positions(&mut self, positions: &[IVec3]) {
         for (index, (position, _)) in self.parts.iter_mut().enumerate() {
             *position = positions[index];
         }
+
+        self.positions = positions.into();
     }
 
     fn entity_type(&self) -> EntityType {

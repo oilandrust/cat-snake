@@ -79,7 +79,7 @@ pub struct SnakeReachGoalEvent(pub Entity);
 pub struct SnakeExitedLevelEvent;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel, StageLabel)]
-enum MovementStages {
+pub enum MovementStages {
     KeyboardInput,
     Undo,
     SnakeMovement,
@@ -135,14 +135,6 @@ impl Plugin for MovementPluggin {
                     .label(MovementStages::SnakeFall)
                     .after(MovementStages::SnakeGrow)
                     .with_system(gravity_system::<Snake, (With<Active>, Without<LevelExitAnim>)>)
-                    .into(),
-            )
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .label(MovementStages::SnakeFall)
-                    .after(MovementStages::SnakeGrow)
                     .with_system(gravity_system::<GridEntity, With<Box>>)
                     .into(),
             )
@@ -156,6 +148,7 @@ impl Plugin for MovementPluggin {
                     .with_system(snake_push_anim_system)
                     .with_system(snake_exit_level_anim_system)
                     .with_system(respawn_snake_on_fall_system)
+                    .with_system(activate_trigger_on_move_system)
                     .into(),
             )
             .add_system(
@@ -220,15 +213,17 @@ fn snake_can_move_forward(
 ) -> bool {
     let new_position = snake.head_position() + direction;
 
-    if snake.occupies_position(new_position) || level_instance.can_walk_or_eat(new_position) {
+    if let Some(other_entity) = &other_entity {
+        return level_instance.can_push_entity(
+            other_entity.0,
+            other_entity.1.positions(),
+            direction,
+        );
+    };
+
+    if snake.occupies_position(new_position) || !level_instance.can_walk_or_eat(new_position) {
         return false;
     }
-
-    if let Some(other_entity) = &other_entity {
-        if !level_instance.can_push_entity(other_entity.0, other_entity.1.positions(), direction) {
-            return false;
-        }
-    };
 
     true
 }
@@ -312,7 +307,7 @@ pub fn snake_movement_control_system(
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut move_command_event: EventReader<MoveCommandEvent>,
-    mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
+    mut _snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
@@ -393,11 +388,11 @@ pub fn snake_movement_control_system(
         .eating_food(food)
         .execute();
 
-    if let Ok(goal) = goal_query.get_single() {
-        if snake.head_position() == goal.0 {
-            snake_reach_goal_event.send(SnakeReachGoalEvent(snake_entity));
-        }
-    }
+    // if let Ok(goal) = goal_query.get_single() {
+    //     if snake.head_position() == goal.0 {
+    //         snake_reach_goal_event.send(SnakeReachGoalEvent(snake_entity));
+    //     }
+    // }
 
     snake_moved_event.send(SnakeMovedEvent);
 
@@ -469,13 +464,34 @@ pub fn grow_snake_on_move_system(
     }
 }
 
+pub fn activate_trigger_on_move_system(
+    level_instance: Res<LevelInstance>,
+    mut snake_moved_event: EventReader<SnakeMovedEvent>,
+    mut commands: Commands,
+    triggers: Query<(Entity, &GridEntity, Option<&Active>), With<Trigger>>,
+) {
+    if snake_moved_event.iter().next().is_none() {
+        return;
+    }
+
+    for (trigger_entity, trigger, active) in &triggers {
+        let has_load = level_instance.is_movable(trigger.0).is_some();
+
+        if has_load && active.is_none() {
+            commands.entity(trigger_entity).insert(Active);
+        } else if !has_load && active.is_some() {
+            commands.entity(trigger_entity).remove::<Active>();
+        }
+    }
+}
+
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn gravity_system<MovableType, Filter>(
     time: Res<Time>,
     constants: Res<GameConstants>,
     mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
-    mut trigger_undo_event: EventWriter<UndoEvent>,
+    mut _trigger_undo_event: EventWriter<UndoEvent>,
     mut snake_reach_goal_event: EventReader<SnakeReachGoalEvent>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut MovableType, Option<&mut GravityFall>), Filter>,

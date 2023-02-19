@@ -14,6 +14,7 @@ pub enum EntityType {
     Spike,
     Wall,
     Box,
+    Trigger,
     Snake,
     Goal,
 }
@@ -21,6 +22,10 @@ pub enum EntityType {
 impl EntityType {
     pub fn is_movable(&self) -> bool {
         *self == EntityType::Snake || *self == EntityType::Box
+    }
+
+    pub fn is_traversable(&self) -> bool {
+        *self == EntityType::Goal || *self == EntityType::Trigger
     }
 }
 
@@ -40,6 +45,10 @@ impl LevelGridEntity {
 
     pub fn is_movable(&self) -> bool {
         self.entity_type.is_movable()
+    }
+
+    pub fn is_traversable(&self) -> bool {
+        self.entity_type.is_traversable()
     }
 }
 
@@ -88,6 +97,14 @@ impl LevelInstance {
         match cell {
             None => false,
             Some(entity) => entity.entity_type == EntityType::Spike,
+        }
+    }
+
+    pub fn is_traversable(&self, position: IVec3) -> bool {
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            None => true,
+            Some(cell_entity) => cell_entity.is_traversable(),
         }
     }
 
@@ -215,24 +232,16 @@ impl LevelInstance {
         direction: IVec3,
     ) -> bool {
         entity_positions.iter().all(|position| {
-            self.is_empty(*position + direction)
-                || self.is_entity_with_index(*position + direction, entity)
+            self.is_traversable(*position + direction)
+                || self.is_entity(*position + direction, entity)
         })
-    }
-
-    pub fn is_entity_with_index(&self, position: IVec3, entity: Entity) -> bool {
-        let walkable = self.occupied_cells.get(&position);
-        match walkable {
-            Some(grid_entity) => grid_entity.entity == entity,
-            _ => false,
-        }
     }
 
     pub fn can_walk_or_eat(&self, position: IVec3) -> bool {
         let cell = self.occupied_cells.get(&position);
         match cell {
-            Some(entity) => !entity.is_movable() && entity.entity_type != EntityType::Food,
-            None => false,
+            Some(entity) => entity.is_traversable() || entity.entity_type == EntityType::Food,
+            None => true,
         }
     }
 

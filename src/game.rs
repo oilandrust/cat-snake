@@ -91,7 +91,7 @@ fn enter_game_system(
             // let start_test_case = test_case.unwrap_or(0);
             // start_test_case_event.send(StartTestCaseEventWithIndex(start_test_case));
         }
-        None => {
+        _ => {
             if let Some(test_level) = args.test_level {
                 start_test_level_event.send(StartTestLevelEventWithIndex(test_level));
                 return;
@@ -131,6 +131,8 @@ pub fn run(app: &mut App, args: &Args) {
     let start_state = if args.command.is_none() && args.level.is_none() && args.test_level.is_none()
     {
         GameState::MainMenu
+    } else if matches!(args.command, Some(args::Commands::Editor)) {
+        GameState::Editor
     } else {
         GameState::Game
     };
