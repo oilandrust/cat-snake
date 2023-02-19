@@ -44,7 +44,7 @@ impl<'a> SnakeCommands<'a> {
 
     pub fn exit_level(&mut self, snake: &'a Snake, entity: Entity, falling: Option<&GravityFall>) {
         let updates = if falling.is_none() {
-            self.level_instance.clear_posisitons(&snake.positions())
+            self.level_instance.clear_posisitons(snake.positions())
         } else {
             vec![]
         };
@@ -57,12 +57,12 @@ impl<'a> SnakeCommands<'a> {
     }
 
     /// Execute a command when a skake start falling.
-    pub fn start_falling(&mut self, snake: &'a dyn Movable, entity: LevelGridEntity) {
-        let updates = self.level_instance.clear_posisitons(&snake.positions());
+    pub fn start_falling(&mut self, movable: &'a dyn Movable, entity: LevelGridEntity) {
+        let updates = self.level_instance.clear_posisitons(movable.positions());
 
         self.history.push_with_updates(
             MoveHistoryEvent::BeginFall(BeginFall {
-                positions: snake.positions(),
+                positions: movable.positions().into(),
                 end: None,
             }),
             entity,
@@ -70,10 +70,10 @@ impl<'a> SnakeCommands<'a> {
         );
     }
 
-    pub fn stop_falling(&mut self, snake: &'a dyn Movable, entity: LevelGridEntity) {
+    pub fn stop_falling(&mut self, movable: &'a dyn Movable, entity: LevelGridEntity) {
         let updates = self
             .level_instance
-            .mark_entity_positions(&snake.positions(), entity);
+            .mark_entity_positions(movable.positions(), entity);
 
         // Stop fall can happen a long time after beggin fall, and other actions can be done in between.
         // We find the corresponding beggin fall and add the undo info to it so that both can be undone at the same time.

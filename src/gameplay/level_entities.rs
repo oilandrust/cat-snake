@@ -1,3 +1,5 @@
+use core::slice;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -33,7 +35,7 @@ pub struct Goal;
 pub struct Box;
 
 pub trait Movable {
-    fn positions(&self) -> Vec<IVec3>;
+    fn positions(&self) -> &[IVec3];
 
     fn translate(&mut self, offset: IVec3);
 
@@ -43,8 +45,8 @@ pub trait Movable {
 }
 
 impl Movable for GridEntity {
-    fn positions(&self) -> Vec<IVec3> {
-        vec![self.0]
+    fn positions(&self) -> &[IVec3] {
+        slice::from_ref(&self.0)
     }
 
     fn translate(&mut self, offset: IVec3) {

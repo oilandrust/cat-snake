@@ -144,11 +144,11 @@ impl LevelInstance {
         let mut updates: VecDeque<LevelEntityUpdateEvent> =
             VecDeque::with_capacity(2 * positions.len());
 
-        for position in &positions {
+        for position in positions {
             let old_value = self.set_empty(*position).unwrap();
             updates.push_front(LevelEntityUpdateEvent::ClearPosition(*position, old_value));
         }
-        for position in &positions {
+        for position in positions {
             let new_position = *position + offset;
             self.mark_position_occupied(new_position, entity);
             updates.push_front(LevelEntityUpdateEvent::FillPosition(new_position));

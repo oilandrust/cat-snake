@@ -130,6 +130,7 @@ pub struct PartClipper {
 
 #[derive(Component, Debug)]
 pub struct Snake {
+    positions: Vec<IVec3>,
     parts: VecDeque<SnakeElement>,
     index: i32,
 }
@@ -137,6 +138,14 @@ pub struct Snake {
 pub struct SpawnSnakeEvent;
 
 impl Snake {
+    pub fn new(template: &SnakeTemplate, index: i32) -> Snake {
+        Snake {
+            positions: template.iter().map(|(position, _)| *position).collect(),
+            parts: VecDeque::from(template.clone()),
+            index,
+        }
+    }
+
     pub fn parts(&self) -> &VecDeque<SnakeElement> {
         &self.parts
     }
@@ -153,29 +162,12 @@ impl Snake {
         self.parts.len()
     }
 
-    pub fn move_back(&mut self, part: &SnakeElement) {
-        self.parts.push_back(*part);
-        self.parts.pop_front();
-    }
-
-    pub fn move_forward(&mut self, direction: IVec3) {
-        self.parts
-            .push_front((self.head_position() + direction, direction));
-        self.parts.pop_back();
-    }
-
     pub fn head_position(&self) -> IVec3 {
         self.parts.front().unwrap().0
     }
 
-    pub fn grow(&mut self) {
-        let (tail_position, tail_direction) = self.tail();
-        let new_part_position = tail_position - tail_direction;
-        self.parts.push_back((new_part_position, tail_direction));
-    }
-
-    pub fn shrink(&mut self) {
-        self.parts.pop_back();
+    pub fn head_direction(&self) -> IVec3 {
+        self.parts.front().unwrap().1
     }
 
     pub fn tail(&self) -> SnakeElement {
@@ -195,18 +187,49 @@ impl Snake {
         self.parts.iter().any(|part| part.0 == position)
     }
 
+    pub fn move_back(&mut self, part: &SnakeElement) {
+        self.parts.push_back(*part);
+        self.parts.pop_front();
+
+        self.update_positions();
+    }
+
+    pub fn move_forward(&mut self, direction: IVec3) {
+        self.parts
+            .push_front((self.head_position() + direction, direction));
+        self.parts.pop_back();
+
+        self.update_positions();
+    }
+
+    pub fn grow(&mut self) {
+        let (tail_position, tail_direction) = self.tail();
+        let new_part_position = tail_position - tail_direction;
+        self.parts.push_back((new_part_position, tail_direction));
+
+        self.update_positions();
+    }
+
+    pub fn shrink(&mut self) {
+        self.parts.pop_back();
+
+        self.update_positions();
+    }
+
     pub fn set_parts(&mut self, parts: Vec<SnakeElement>) {
         self.parts = parts.into();
+
+        self.update_positions();
+    }
+
+    fn update_positions(&mut self) {
+        self.positions = self.parts.iter().map(|(position, _)| *position).collect();
     }
 }
 
 impl Movable for Snake {
-    fn positions(&self) -> Vec<IVec3> {
-        self.parts
-            .iter()
-            .copied()
-            .map(|(position, _)| position)
-            .collect()
+    fn positions(&self) -> &[IVec3] {
+        &self.positions
     }
 
     fn translate(&mut self, offset: IVec3) {
@@ -234,10 +257,7 @@ pub fn spawn_snake(
     snake_index: i32,
 ) -> Entity {
     let mut spawn_command = commands.spawn((
-        Snake {
-            parts: VecDeque::from(snake_template.clone()),
-            index: snake_index,
-        },
+        Snake::new(snake_template, snake_index),
         SpatialBundle { ..default() },
         LevelEntity,
         Active,

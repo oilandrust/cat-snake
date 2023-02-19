@@ -1,4 +1,4 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{ecs::query::ReadOnlyWorldQuery, prelude::*, utils::HashMap};
 use bevy_kira_audio::{Audio, AudioControl};
 use bevy_tweening::{
     component_animator_system, AnimationSystem, Animator, EaseFunction, Lens, Tween,
@@ -225,7 +225,7 @@ fn snake_can_move_forward(
     }
 
     if let Some(other_entity) = &other_entity {
-        if !level_instance.can_push_entity(other_entity.0, &other_entity.1.positions(), direction) {
+        if !level_instance.can_push_entity(other_entity.0, other_entity.1.positions(), direction) {
             return false;
         }
     };
@@ -304,7 +304,7 @@ impl<'a> MovableRegistry<'a> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn snake_movement_control_system(
     assets: Res<GameAssets>,
     audio: Res<Audio>,
@@ -328,6 +328,10 @@ pub fn snake_movement_control_system(
     let Some(MoveCommandEvent(direction)) = move_command_event.iter().next() else {
         return;
     };
+
+    if *direction == -snake.head_direction() {
+        return;
+    }
 
     let mut movable_registry = MovableRegistry::new(&mut other_snakes_query, &mut boxes_query);
 
@@ -358,9 +362,8 @@ pub fn snake_movement_control_system(
                 break 'choose_direction None;
             }
 
-            let movable_entity = level_instance.is_movable(new_position);
-
             // Find if there is a movable entity in the way.
+            let movable_entity = level_instance.is_movable(new_position);
             let movable =
                 movable_entity.map(|entity| (entity.entity, movable_registry.get(&entity)));
 
@@ -478,17 +481,37 @@ pub fn gravity_system<MovableType, Filter>(
     mut query: Query<(Entity, &mut MovableType, Option<&mut GravityFall>), Filter>,
 ) where
     MovableType: Component + Movable,
-    Filter: bevy::ecs::query::ReadOnlyWorldQuery,
+    Filter: ReadOnlyWorldQuery,
 {
-    for (snake_entity, mut movable, gravity_fall) in &mut query {
+    for (movable_entity, mut movable, gravity_fall) in &mut query {
         if snake_reach_goal_event
             .iter()
-            .any(|event| event.0 == snake_entity)
+            .any(|event| event.0 == movable_entity)
         {
             continue;
         }
 
         match gravity_fall {
+            None => {
+                // Check if snake is on the ground and spawn gravity fall if not.
+                if min_distance_to_ground(&level, movable.positions(), movable_entity) <= 1 {
+                    continue;
+                }
+
+                let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
+                snake_commands.start_falling(
+                    movable.as_ref(),
+                    LevelGridEntity::new(movable_entity, movable.entity_type()),
+                );
+
+                movable.translate(IVec3::NEG_Y);
+
+                commands.entity(movable_entity).insert(GravityFall {
+                    velocity: 0.0,
+                    relative_z: 1.0,
+                    grid_distance: 1,
+                });
+            }
             Some(mut gravity_fall) => {
                 gravity_fall.velocity -= constants.gravity * time.delta_seconds();
                 gravity_fall.relative_z += gravity_fall.velocity * time.delta_seconds();
@@ -514,14 +537,14 @@ pub fn gravity_system<MovableType, Filter>(
                 // }
 
                 // keep falling..
-                if min_distance_to_ground(&level, &movable.positions(), snake_entity) > 1 {
+                if min_distance_to_ground(&level, movable.positions(), movable_entity) > 1 {
                     gravity_fall.relative_z = 1.0;
                     gravity_fall.grid_distance += 1;
 
                     movable.translate(IVec3::NEG_Y);
                 } else {
                     // ..or stop falling animation.
-                    commands.entity(snake_entity).remove::<GravityFall>();
+                    commands.entity(movable_entity).remove::<GravityFall>();
 
                     // Nothing to do if we fell less than an unit, meaning we stayed at the same place.
                     if gravity_fall.grid_distance == 0 {
@@ -531,28 +554,8 @@ pub fn gravity_system<MovableType, Filter>(
                     let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
                     snake_commands.stop_falling(
                         movable.as_ref(),
-                        LevelGridEntity::new(snake_entity, movable.entity_type()),
+                        LevelGridEntity::new(movable_entity, movable.entity_type()),
                     );
-                }
-            }
-            None => {
-                // Check if snake is on the ground and spawn gravity fall if not.
-                let min_distance_to_ground =
-                    min_distance_to_ground(&level, &movable.positions(), snake_entity);
-                if min_distance_to_ground > 1 {
-                    let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                    snake_commands.start_falling(
-                        movable.as_ref(),
-                        LevelGridEntity::new(snake_entity, movable.entity_type()),
-                    );
-
-                    movable.translate(IVec3::NEG_Y);
-
-                    commands.entity(snake_entity).insert(GravityFall {
-                        velocity: 0.0,
-                        relative_z: 1.0,
-                        grid_distance: 1,
-                    });
                 }
             }
         }

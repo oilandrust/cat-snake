@@ -213,10 +213,20 @@ pub fn spawn_level_entities_system(
         .get(&loaded_level.0)
         .expect("Level should be loaded here!");
 
+    let mut min = 1000 * IVec3::ONE;
+    let mut max = 1000 * IVec3::NEG_ONE;
+
+    level_template.walls.iter().for_each(|position| {
+        min = min.min(*position);
+        max = max.max(*position);
+    });
+
+    let center = min.as_vec3() + 0.5 * (max - min).as_vec3();
+
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_translation(Vec3::ZERO + 10.0 * Vec3::Y + 5.0 * Vec3::Z)
-                .looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_translation(center + 15.0 * Vec3::Y + 7.0 * Vec3::Z)
+                .looking_at(center, Vec3::Y),
             ..default()
         },
         LevelEntity,
