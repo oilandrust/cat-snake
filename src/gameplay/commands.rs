@@ -1,6 +1,6 @@
 use crate::{
-    gameplay::movement_pluggin::GravityFall,
-    gameplay::snake_pluggin::Snake,
+    gameplay::movement_plugin::GravityFall,
+    gameplay::snake_plugin::Snake,
     gameplay::undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
 };

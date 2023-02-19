@@ -1,7 +1,8 @@
-use bevy::{app::AppExit, prelude::*};
+use bevy::prelude::*;
 
-use iyes_loopless::prelude::{
-    AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem,
+use iyes_loopless::{
+    prelude::{AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem},
+    state::NextState,
 };
 
 use crate::{
@@ -17,10 +18,10 @@ use crate::{
 use super::{
     commands::SnakeCommands,
     level_entities::*,
-    movement_pluggin::{GravityFall, SnakeReachGoalEvent},
-    movement_pluggin::{LevelExitAnim, MovementStages, SnakeExitedLevelEvent},
-    snake_pluggin::MaterialMeshBuilder,
-    snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
+    movement_plugin::{GravityFall, SnakeReachGoalEvent},
+    movement_plugin::{LevelExitAnim, MovementStages, SnakeExitedLevelEvent},
+    snake_plugin::MaterialMeshBuilder,
+    snake_plugin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     undo::SnakeHistory,
 };
 
@@ -36,7 +37,7 @@ pub struct CurrentLevelId(pub usize);
 #[derive(Resource)]
 pub struct CurrentLevelAssetPath(pub String);
 
-pub struct LevelPluggin;
+pub struct LevelPlugin;
 
 #[derive(Component, Clone, Copy)]
 pub struct Water;
@@ -48,7 +49,7 @@ pub enum LevelStages {
     CheckLevelCondition,
 }
 
-impl Plugin for LevelPluggin {
+impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
         app.add_asset::<LevelTemplate>()
             .init_asset_loader::<LevelTemplateLoader>()
@@ -449,11 +450,11 @@ pub fn start_snake_exit_level_system(
 }
 
 pub fn finish_snake_exit_level_system(
+    mut commands: Commands,
     level_id: Res<CurrentLevelId>,
     snake_reach_goal_event: EventReader<SnakeExitedLevelEvent>,
     mut event_start_level: EventWriter<StartLevelEventWithIndex>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
-    mut exit: EventWriter<AppExit>,
     snakes_query: Query<&Snake, With<Active>>,
 ) {
     if snake_reach_goal_event.is_empty() {
@@ -462,7 +463,8 @@ pub fn finish_snake_exit_level_system(
 
     if snakes_query.is_empty() {
         if level_id.0 == LEVELS.len() - 1 {
-            exit.send(AppExit);
+            event_clear_level.send(ClearLevelEvent);
+            commands.insert_resource(NextState(GameState::MainMenu));
         } else {
             event_clear_level.send(ClearLevelEvent);
             event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));

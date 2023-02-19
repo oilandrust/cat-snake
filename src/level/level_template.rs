@@ -7,7 +7,7 @@ use bevy::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::gameplay::snake_pluggin::SnakeTemplate;
+use crate::gameplay::snake_plugin::SnakeTemplate;
 
 #[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug, Default)]
 #[uuid = "39cadc56-aa9c-4543-8640-a018b74b5052"]

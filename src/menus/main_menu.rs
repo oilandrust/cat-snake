@@ -5,7 +5,7 @@ use iyes_loopless::{
     state::NextState,
 };
 
-use crate::{despawn_with, GameState};
+use crate::{despawn_with_system, GameState};
 
 use super::MenuStyles;
 
@@ -15,7 +15,7 @@ impl Plugin for MainMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameState::MainMenu, setup_camera)
             .add_enter_system(GameState::MainMenu, setup_menu)
-            .add_exit_system(GameState::MainMenu, despawn_with::<MainMenu>)
+            .add_exit_system(GameState::MainMenu, despawn_with_system::<MainMenu>)
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::MainMenu)

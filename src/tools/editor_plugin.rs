@@ -9,14 +9,14 @@ use iyes_loopless::{
 use ron::ser::PrettyConfig;
 
 use crate::{
-    despawn_entities, despawn_with,
+    despawn_entities, despawn_with_system,
     gameplay::{
         level_entities::*,
-        level_pluggin::{
+        level_plugin::{
             clear_level_runtime_resources_system, spawn_level_entities_system,
             CurrentLevelAssetPath, LevelLoadedEvent,
         },
-        snake_pluggin::{
+        snake_plugin::{
             spawn_snake_system, update_snake_transforms_system, MaterialMeshBuilder, Snake,
             SpawnSnakeEvent,
         },
@@ -65,7 +65,7 @@ impl Plugin for EditorPlugin {
                 create_new_level_on_enter_system
                     .run_unless_resource_exists::<CurrentLevelAssetPath>(),
             )
-            .add_exit_system(GameState::Editor, despawn_with::<LevelEntity>)
+            .add_exit_system(GameState::Editor, despawn_with_system::<LevelEntity>)
             .add_exit_system(GameState::Editor, clear_level_runtime_resources_system)
             .add_system_set(
                 ConditionSet::new()

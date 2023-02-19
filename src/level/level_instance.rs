@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb, utils::HashMap};
 
 use crate::{
-    gameplay::{level_entities::Movable, snake_pluggin::Snake, undo::LevelEntityUpdateEvent},
+    gameplay::{level_entities::Movable, snake_plugin::Snake, undo::LevelEntityUpdateEvent},
     utils::ray_intersects_aabb,
 };
 use bevy_prototype_debug_lines::DebugShapes;

@@ -4,7 +4,7 @@ use iyes_loopless::{
     state::NextState,
 };
 
-use crate::{despawn_with, level::levels::LEVELS, GameState};
+use crate::{despawn_with_system, level::levels::LEVELS, GameState};
 
 use super::{button_interact_visual_system, MenuStyles};
 
@@ -14,7 +14,10 @@ impl Plugin for SelectLevelMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_enter_system(GameState::SelectLevelMenu, setup_camera)
             .add_enter_system(GameState::SelectLevelMenu, setup_menu)
-            .add_exit_system(GameState::SelectLevelMenu, despawn_with::<SelectLevelMenu>)
+            .add_exit_system(
+                GameState::SelectLevelMenu,
+                despawn_with_system::<SelectLevelMenu>,
+            )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::SelectLevelMenu)

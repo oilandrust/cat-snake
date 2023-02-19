@@ -3,10 +3,10 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    gameplay::level_pluggin::{
+    gameplay::level_plugin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath,
     },
-    gameplay::{level_pluggin::LevelStages, movement_pluggin::MoveCommandEvent},
+    gameplay::{level_plugin::LevelStages, movement_plugin::MoveCommandEvent},
 };
 
 #[derive(Clone)]
@@ -44,9 +44,9 @@ macro_rules! test_cases {
 
 pub struct StartTestCaseEventWithIndex(pub usize);
 
-pub struct AutomatedTestPluggin;
+pub struct AutomatedTestPlugin;
 
-impl Plugin for AutomatedTestPluggin {
+impl Plugin for AutomatedTestPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<StartTestCaseEventWithIndex>()
             .add_startup_system(init_automation)

@@ -4,9 +4,9 @@ use std::collections::VecDeque;
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::SNAKE_COLORS,
+    gameplay::game_constants_plugin::SNAKE_COLORS,
     gameplay::level_entities::LevelEntity,
-    gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
+    gameplay::movement_plugin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
     utils::{ray_from_screen_space, ray_intersects_aabb},
@@ -17,9 +17,9 @@ use crate::level::level_template::{LevelTemplate, LoadedLevel};
 
 use super::level_entities::{GridEntity, Movable};
 
-pub struct SnakePluggin;
+pub struct SnakePlugin;
 
-impl Plugin for SnakePluggin {
+impl Plugin for SnakePlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<DespawnSnakePartEvent>()

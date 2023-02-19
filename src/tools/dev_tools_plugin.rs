@@ -7,7 +7,7 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::DebugLinesPlugin;
 use iyes_loopless::prelude::ConditionSet;
 
-use crate::gameplay::game_constants_pluggin::GameConstants;
+use crate::gameplay::game_constants_plugin::GameConstants;
 use crate::GameState;
 
 pub struct DevToolsPlugin;

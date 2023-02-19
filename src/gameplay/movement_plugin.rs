@@ -8,8 +8,8 @@ use rand::prelude::*;
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::*,
-    gameplay::snake_pluggin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
+    gameplay::game_constants_plugin::*,
+    gameplay::snake_plugin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
     GameAssets, GameState,
@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     level_entities::*,
-    snake_pluggin::{
+    snake_plugin::{
         DespawnSnakePartEvent, MaterialMeshBuilder, PartClipper, SnakeElement, SnakePart,
     },
 };
@@ -68,7 +68,7 @@ impl Lens<PartGrowAnim> for GrowPartLens {
     }
 }
 
-pub struct MovementPluggin;
+pub struct MovementPlugin;
 
 pub struct MoveCommandEvent(pub IVec3);
 
@@ -88,7 +88,7 @@ pub enum MovementStages {
     SmoothMovement,
 }
 
-impl Plugin for MovementPluggin {
+impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<SnakeMovedEvent>()
             .add_event::<MoveCommandEvent>()

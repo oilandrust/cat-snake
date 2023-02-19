@@ -2,15 +2,15 @@ use bevy::prelude::*;
 
 use crate::{
     gameplay::level_entities::*,
-    gameplay::movement_pluggin::GravityFall,
-    gameplay::snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
+    gameplay::movement_plugin::GravityFall,
+    gameplay::snake_plugin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
     level::level_instance::{LevelGridEntity, LevelInstance},
 };
 
 use super::{
     level_entities::GridEntity,
-    movement_pluggin::MovableRegistry,
-    snake_pluggin::{MaterialMeshBuilder, SnakeElement},
+    movement_plugin::MovableRegistry,
+    snake_plugin::{MaterialMeshBuilder, SnakeElement},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

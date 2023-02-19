@@ -9,8 +9,8 @@ use crate::{
 };
 
 use super::{
-    game_constants_pluggin::{FOOD_COLOR, SPIKE_COLOR},
-    snake_pluggin::MaterialMeshBuilder,
+    game_constants_plugin::{FOOD_COLOR, SPIKE_COLOR},
+    snake_plugin::MaterialMeshBuilder,
 };
 
 #[derive(Component)]
