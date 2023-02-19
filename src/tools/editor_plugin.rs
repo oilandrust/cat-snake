@@ -356,15 +356,12 @@ fn delete_selected_wall_system(
     }
 }
 
-fn create_new_level_on_enter_system(
-    mut level_loaded_event: EventWriter<LevelLoadedEvent>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
-    mut levels: ResMut<Assets<LevelTemplate>>,
-    mut commands: Commands,
-    entities: Query<Entity, With<LevelEntity>>,
+fn create_new_level(
+    level_loaded_event: &mut EventWriter<LevelLoadedEvent>,
+    spawn_snake_event: &mut EventWriter<SpawnSnakeEvent>,
+    levels: &mut Assets<LevelTemplate>,
+    commands: &mut Commands,
 ) {
-    despawn_entities::<LevelEntity>(&mut commands, entities);
-
     let mut walls = Vec::with_capacity(10 * 10);
     for j in -5..5 {
         for i in -5..5 {
@@ -381,6 +378,20 @@ fn create_new_level_on_enter_system(
     spawn_snake_event.send(SpawnSnakeEvent);
 }
 
+fn create_new_level_on_enter_system(
+    mut level_loaded_event: EventWriter<LevelLoadedEvent>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    mut levels: ResMut<Assets<LevelTemplate>>,
+    mut commands: Commands,
+) {
+    create_new_level(
+        &mut level_loaded_event,
+        &mut spawn_snake_event,
+        &mut levels,
+        &mut commands,
+    );
+}
+
 fn create_new_level_system(
     keyboard: Res<Input<KeyCode>>,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
@@ -394,20 +405,12 @@ fn create_new_level_system(
     }
     despawn_entities::<LevelEntity>(&mut commands, entities);
 
-    let mut walls = Vec::with_capacity(10 * 10);
-    for j in -5..5 {
-        for i in -5..5 {
-            walls.push(IVec3::new(i, 0, j));
-        }
-    }
-
-    let new_tempale = LevelTemplate { walls, ..default() };
-
-    commands.insert_resource(CurrentLevelAssetPath("levels/new.lvl".to_owned()));
-    commands.insert_resource(LoadedLevel(levels.add(new_tempale)));
-    commands.insert_resource(LevelInstance::new());
-    level_loaded_event.send(LevelLoadedEvent);
-    spawn_snake_event.send(SpawnSnakeEvent);
+    create_new_level(
+        &mut level_loaded_event,
+        &mut spawn_snake_event,
+        &mut levels,
+        &mut commands,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
