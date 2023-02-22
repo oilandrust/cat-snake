@@ -13,15 +13,16 @@ path = "src/desktop_main.rs"
 
 [dependencies.bevy]
 version = "0.9.1"
-default-features = false
-features = [
-    "render",
-    "bevy_winit",
-    "png",
-    "x11",
-    "wayland",
-    "filesystem_watcher",
-]
+default-features = true
+# features = [
+#     "render",
+#     "bevy_winit",
+#     "png",
+#     "x11",
+#     "wayland",
+#     "filesystem_watcher",
+#     "scene",
+# ]
 
 [dependencies.bevy_kira_audio]
 version = "0.13"
@@ -36,7 +37,6 @@ bevy_prototype_debug_lines = { git = "https://github.com/Toqozz/bevy_debug_lines
 bevy_tweening = "0.6.0"
 clap = { version = "4.1.1", features = ["derive"] }
 egui = "0.20.1"
-bracket-color = "~0.8"
 iyes_loopless = "0.9"
 rand = "0.8.5"
 ron = "0.8"

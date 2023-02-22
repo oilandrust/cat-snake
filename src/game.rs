@@ -155,6 +155,7 @@ pub fn run(app: &mut App, args: &Args) {
                     ..Default::default()
                 }),
         )
+        .add_asset::<bevy::render::prelude::Mesh>()
         .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
         .add_plugin(MenuPlugin)
         .add_plugin(MainMenuPlugin)
@@ -172,6 +173,10 @@ pub struct GameAssets {
     pub outline_texture: Handle<Image>,
     pub cube_mesh: Handle<Mesh>,
     pub default_material: Handle<StandardMaterial>,
+    pub goal_active_mesh: Handle<Mesh>,
+    pub goal_inactive_mesh: Handle<Mesh>,
+    pub goal_active_material: Handle<StandardMaterial>,
+    pub goal_inactive_material: Handle<StandardMaterial>,
 }
 
 fn load_assets(
@@ -185,6 +190,22 @@ fn load_assets(
         move_effect: asset_server.load("move_effect.mp3"),
         outline_texture: asset_server.load("outline.png"),
         cube_mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        goal_active_mesh: asset_server.load("goal.gltf#Mesh0/Primitive0"),
+        goal_inactive_mesh: meshes.add(Mesh::from(shape::Box {
+            min_x: -0.4,
+            max_x: 0.4,
+            min_y: -0.5,
+            max_y: -0.3,
+            min_z: -0.4,
+            max_z: 0.4,
+        })),
+        goal_active_material: materials.add(StandardMaterial {
+            base_color: Color::rgba_u8(255, 255, 153, 150),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }),
+        goal_inactive_material: materials.add(Color::BLACK.into()),
         default_material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.8, 0.7, 0.6),
             ..default()

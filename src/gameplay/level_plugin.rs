@@ -322,12 +322,7 @@ pub fn spawn_level_entities_system(
     }
 
     if let Some(goal_position) = level_template.goal {
-        spawn_goal(
-            &mut mesh_builder,
-            &mut commands,
-            &goal_position,
-            &mut level_instance,
-        );
+        spawn_goal(&mut commands, &goal_position, &mut level_instance, &assets);
     };
 }
 
@@ -366,21 +361,35 @@ fn _activate_goal_when_all_food_eaten_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn activate_goal_when_trigger_pressed_system(
     mut commands: Commands,
     triggers_query: Query<&Trigger, Without<Active>>,
-    goal_query: Query<(Entity, Option<&Active>), With<Goal>>,
+    assets: Res<GameAssets>,
+    mut goal_query: Query<
+        (
+            Entity,
+            Option<&Active>,
+            &mut Handle<Mesh>,
+            &mut Handle<StandardMaterial>,
+        ),
+        With<Goal>,
+    >,
 ) {
-    let Ok((goal_entity, active)) = goal_query.get_single() else {
+    let Ok((goal_entity, active, mut mesh, mut material)) = goal_query.get_single_mut() else {
         return;
     };
 
     if triggers_query.is_empty() {
         if active.is_none() {
             commands.entity(goal_entity).insert(Active);
+            *mesh = assets.goal_active_mesh.clone();
+            *material = assets.goal_active_material.clone();
         }
     } else if active.is_some() {
         commands.entity(goal_entity).remove::<Active>();
+        *mesh = assets.goal_inactive_mesh.clone();
+        *material = assets.goal_inactive_material.clone();
     }
 }
 

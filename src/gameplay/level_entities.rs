@@ -1,6 +1,6 @@
 use core::slice;
 
-use bevy::prelude::*;
+use bevy::{pbr::NotShadowCaster, prelude::*};
 
 use crate::{
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
@@ -158,18 +158,24 @@ pub fn spawn_box(
 }
 
 pub fn spawn_goal(
-    mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
+    assets: &GameAssets,
 ) {
     let entity = commands
         .spawn((
-            mesh_builder.build_goal_mesh(*position),
+            PbrBundle {
+                mesh: assets.goal_inactive_mesh.clone(),
+                material: assets.goal_inactive_material.clone(),
+                transform: Transform::from_translation(position.as_vec3()),
+                ..default()
+            },
             GridEntity(*position),
             Goal,
             LevelEntity,
             PickableBundle::default(),
+            NotShadowCaster,
         ))
         .id();
 
@@ -214,22 +220,6 @@ impl<'a> MaterialMeshBuilder<'a> {
                 subdivisions: 5,
             })),
             material: self.materials.add(FOOD_COLOR.into()),
-            transform: Transform::from_translation(position.as_vec3()),
-            ..default()
-        }
-    }
-
-    pub fn build_goal_mesh(&mut self, position: IVec3) -> PbrBundle {
-        PbrBundle {
-            mesh: self.meshes.add(Mesh::from(shape::Box {
-                min_x: -0.4,
-                max_x: 0.4,
-                min_y: -0.5,
-                max_y: -0.3,
-                min_z: -0.4,
-                max_z: 0.4,
-            })),
-            material: self.materials.add(Color::BLACK.into()),
             transform: Transform::from_translation(position.as_vec3()),
             ..default()
         }

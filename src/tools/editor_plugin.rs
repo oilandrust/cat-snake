@@ -255,12 +255,7 @@ fn add_entity_on_click_system(
         }
         EntityType::Snake => {}
         EntityType::Goal => {
-            spawn_goal(
-                &mut mesh_builder,
-                &mut commands,
-                &position,
-                &mut level_instance,
-            );
+            spawn_goal(&mut commands, &position, &mut level_instance, &assets);
         }
     }
 }
