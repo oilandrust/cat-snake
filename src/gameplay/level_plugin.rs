@@ -234,7 +234,7 @@ pub fn spawn_level_entities_system(
 
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_translation(center + 15.0 * Vec3::Y + 7.0 * Vec3::Z)
+            transform: Transform::from_translation(center + 15.0 * Vec3::Y + 12.0 * Vec3::Z)
                 .looking_at(center, Vec3::Y),
             ..default()
         },

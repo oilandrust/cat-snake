@@ -100,9 +100,7 @@ pub fn spawn_wall(
     let entity = commands
         .spawn((
             PbrBundle {
-                mesh: mesh_builder
-                    .meshes
-                    .add(Mesh::from(shape::Cube { size: 1.0 })),
+                mesh: assets.cube_mesh.clone(),
                 material: ground_material,
                 transform: Transform::from_translation(position.as_vec3()),
                 ..default()

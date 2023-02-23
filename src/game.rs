@@ -168,7 +168,6 @@ pub fn run(app: &mut App, args: &Args) {
 
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
-    pub background_noise: Handle<AudioSource>,
     pub move_effect: Handle<AudioSource>,
     pub outline_texture: Handle<Image>,
     pub cube_mesh: Handle<Mesh>,
@@ -186,7 +185,6 @@ fn load_assets(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.insert_resource(GameAssets {
-        background_noise: asset_server.load("beach.mp3"),
         move_effect: asset_server.load("move_effect.mp3"),
         outline_texture: asset_server.load("outline.png"),
         cube_mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),

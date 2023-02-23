@@ -15,3 +15,7 @@ Game:
 Editor:
     * Click to add wall
         * Fix imprecision
+
+Bugs:
+    * Fall on goal
+    * Goal not deactivated on undo

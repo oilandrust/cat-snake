@@ -39,6 +39,9 @@ assets = array_concat ${assets} ${shaders}
 levels = glob_array assets/**/*.lvl
 assets = array_concat ${assets} ${levels}
 
+meshes = glob_array assets/**/*.gltf
+assets = array_concat ${assets} ${meshes}
+
 for path in ${assets}
     cp ${path} release/${PLATFORM}/${path}
 end
