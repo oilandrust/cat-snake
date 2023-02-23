@@ -13,25 +13,15 @@ use crate::{
     GameState,
 };
 
-use crate::level::level_template::{LevelTemplate, LoadedLevel};
-
 use super::level_entities::{GridEntity, Movable};
 
 pub struct SnakePlugin;
 
 impl Plugin for SnakePlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<SpawnSnakeEvent>()
-            .add_event::<DespawnSnakePartEvent>()
+        app.add_event::<DespawnSnakePartEvent>()
             .add_event::<DespawnSnakeEvent>()
             .add_event::<DespawnSnakePartsEvent>()
-            .add_system_to_stage(
-                CoreStage::PreUpdate,
-                spawn_snake_system
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LoadedLevel>()
-                    .run_if_resource_exists::<LevelInstance>(),
-            )
             .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -135,8 +125,6 @@ pub struct Snake {
     parts: VecDeque<SnakeElement>,
     index: i32,
 }
-
-pub struct SpawnSnakeEvent;
 
 impl Snake {
     pub fn new(template: &SnakeTemplate, index: i32) -> Snake {
@@ -256,36 +244,6 @@ impl Movable for Snake {
     }
 }
 
-pub fn spawn_snake(
-    part_builder: &mut MaterialMeshBuilder,
-    commands: &mut Commands,
-    level_instance: &mut LevelInstance,
-    snake_template: &SnakeTemplate,
-    snake_index: i32,
-) -> Entity {
-    let mut spawn_command = commands.spawn((
-        Snake::new(snake_template, snake_index),
-        SpatialBundle { ..default() },
-        LevelEntity,
-        Active,
-    ));
-
-    spawn_command.with_children(|parent| {
-        for (index, part) in snake_template.iter().enumerate() {
-            parent.spawn(part_builder.build_part(part.0, snake_index, index));
-        }
-    });
-
-    for (position, _) in snake_template {
-        level_instance.mark_position_occupied(
-            *position,
-            LevelGridEntity::new(spawn_command.id(), EntityType::Snake),
-        );
-    }
-
-    spawn_command.id()
-}
-
 #[allow(clippy::type_complexity)]
 pub fn update_snake_transforms_system(
     mut snake_query: Query<
@@ -366,44 +324,6 @@ pub fn set_snake_active(
                 parent.spawn(part_builder.build_part(part.0, snake.index(), index));
             }
         });
-}
-
-pub fn spawn_snake_system(
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut level_instance: ResMut<LevelInstance>,
-    mut commands: Commands,
-    mut event_spawn_snake: EventReader<SpawnSnakeEvent>,
-    loaded_level: Res<LoadedLevel>,
-    level_templates: ResMut<Assets<LevelTemplate>>,
-) {
-    if event_spawn_snake.iter().next().is_none() {
-        return;
-    }
-    event_spawn_snake.clear();
-
-    let level_template = level_templates
-        .get(&loaded_level.0)
-        .expect("Level should be loaded here!");
-
-    let mut part_builder = MaterialMeshBuilder {
-        meshes: meshes.as_mut(),
-        materials: materials.as_mut(),
-    };
-
-    for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
-        let entity = spawn_snake(
-            &mut part_builder,
-            &mut commands,
-            &mut level_instance,
-            snake_template,
-            snake_index as i32,
-        );
-
-        if snake_index == 0 {
-            commands.entity(entity).insert(SelectedSnake);
-        }
-    }
 }
 
 pub fn select_snake_mouse_system(

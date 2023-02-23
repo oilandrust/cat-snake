@@ -1,7 +1,6 @@
 use std::{fs::File, io::Write};
 
 use bevy::{prelude::*, tasks::IoTaskPool};
-use bevy_prototype_debug_lines::DebugShapes;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -16,10 +15,7 @@ use crate::{
             clear_level_runtime_resources_system, spawn_level_entities_system,
             CurrentLevelAssetPath, LevelLoadedEvent,
         },
-        snake_plugin::{
-            spawn_snake_system, update_snake_transforms_system, MaterialMeshBuilder, Snake,
-            SpawnSnakeEvent,
-        },
+        snake_plugin::{update_snake_transforms_system, MaterialMeshBuilder, Snake, SnakePart},
     },
     level::{
         level_instance::{EntityType, LevelInstance},
@@ -35,7 +31,7 @@ use crate::{
 
 use super::{
     cameras::camera_3d_free::FlycamPlugin,
-    picking::{DefaultPickingPlugins, Selection},
+    picking::{DefaultPickingPlugins, PickableBundle, PickableMesh, Selection},
 };
 
 pub struct EditorPlugin;
@@ -72,15 +68,16 @@ impl Plugin for EditorPlugin {
                     .run_in_state(GameState::Editor)
                     .run_if_resource_exists::<LevelInstance>()
                     .with_system(spawn_level_entities_system)
-                    .with_system(spawn_snake_system)
+                    .with_system(bevy::window::close_on_esc)
                     .into(),
             )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
                     .with_system(choose_entity_to_add_system)
+                    .with_system(add_pickable_to_level_entities_system)
                     .with_system(add_entity_on_click_system)
-                    .with_system(delete_selected_wall_system)
+                    .with_system(delete_selected_entity_system)
                     .with_system(create_new_level_system)
                     .with_system(update_snake_transforms_system)
                     .with_system(move_selected_grid_entity)
@@ -101,7 +98,6 @@ fn start_editor_system(
     keyboard: Res<Input<KeyCode>>,
     mut commands: Commands,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::E) {
         return;
@@ -109,7 +105,6 @@ fn start_editor_system(
 
     commands.insert_resource(NextState(GameState::Editor));
     level_loaded_event.send(LevelLoadedEvent);
-    spawn_snake_event.send(SpawnSnakeEvent);
 }
 
 fn init_level_instance_system(mut commands: Commands) {
@@ -173,6 +168,8 @@ fn choose_entity_to_add_system(
         editor_state.insert_entity_type = EntityType::Box;
     } else if keyboard.just_pressed(KeyCode::T) {
         editor_state.insert_entity_type = EntityType::Trigger;
+    } else if keyboard.just_pressed(KeyCode::L) {
+        editor_state.insert_entity_type = EntityType::Snake;
     }
 }
 
@@ -187,8 +184,8 @@ fn add_entity_on_click_system(
     mut level_instance: ResMut<LevelInstance>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    snakes: Query<&Snake>,
     assets: Res<GameAssets>,
-    mut shapes: ResMut<DebugShapes>,
 ) {
     if !keyboard.pressed(KeyCode::LControl) || !buttons.just_pressed(MouseButton::Left) {
         return;
@@ -207,71 +204,75 @@ fn add_entity_on_click_system(
         materials: materials.as_mut(),
     };
 
-    let Some(position) = level_instance.find_first_free_cell_on_ray(ray, shapes.as_mut()) else {
+    let Some(position) = level_instance.find_first_free_cell_on_ray(ray) else {
         return;
     };
 
-    match editor_state.insert_entity_type {
-        EntityType::Food => {
-            spawn_food(
+    let id = match editor_state.insert_entity_type {
+        EntityType::Food => spawn_food(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+        ),
+        EntityType::Spike => spawn_spike(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+        ),
+        EntityType::Wall => spawn_wall(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+            assets.as_ref(),
+        ),
+        EntityType::Box => spawn_box(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+        ),
+        EntityType::Trigger => spawn_trigger(
+            &mut mesh_builder,
+            &mut commands,
+            &position,
+            &mut level_instance,
+        ),
+        EntityType::Snake => {
+            let snake_template = vec![(position, IVec3::X)];
+            spawn_snake(
                 &mut mesh_builder,
                 &mut commands,
-                &position,
                 &mut level_instance,
-            );
+                &snake_template,
+                snakes.iter().len() as i32,
+            )
         }
-        EntityType::Spike => {
-            spawn_spike(
-                &mut mesh_builder,
-                &mut commands,
-                &position,
-                &mut level_instance,
-            );
-        }
-        EntityType::Wall => {
-            spawn_wall(
-                &mut mesh_builder,
-                &mut commands,
-                &position,
-                &mut level_instance,
-                assets.as_ref(),
-            );
-        }
-        EntityType::Box => {
-            spawn_box(
-                &mut mesh_builder,
-                &mut commands,
-                &position,
-                &mut level_instance,
-            );
-        }
-        EntityType::Trigger => {
-            spawn_trigger(
-                &mut mesh_builder,
-                &mut commands,
-                &position,
-                &mut level_instance,
-            );
-        }
-        EntityType::Snake => {}
-        EntityType::Goal => {
-            spawn_goal(&mut commands, &position, &mut level_instance, &assets);
-        }
+        EntityType::Goal => spawn_goal(&mut commands, &position, &mut level_instance, &assets),
+    };
+
+    commands.entity(id).insert(PickableBundle::default());
+}
+
+fn add_pickable_to_level_entities_system(
+    mut commands: Commands,
+    grid_entities: Query<Entity, (With<GridEntity>, Without<PickableMesh>)>,
+    snake_parts: Query<Entity, (With<SnakePart>, Without<PickableMesh>)>,
+) {
+    for entity in &grid_entities {
+        commands.entity(entity).insert(PickableBundle::default());
+    }
+    for entity in &snake_parts {
+        commands.entity(entity).insert(PickableBundle::default());
     }
 }
 
-fn move_selected_grid_entity(
-    keyboard: Res<Input<KeyCode>>,
-    mouse_input: Res<Input<MouseButton>>,
-    mut level_instance: ResMut<LevelInstance>,
-    mut selection: Query<(&Selection, &mut GridEntity, &mut Transform)>,
-    camera: Query<&GlobalTransform, With<EditorCamera>>,
-) {
-    if mouse_input.pressed(MouseButton::Right) {
-        return;
-    }
-
-    let camera_transform = camera.single();
+fn select_move_direction(
+    keyboard: &Input<KeyCode>,
+    camera_transform: &GlobalTransform,
+) -> Option<IVec3> {
     let right = camera_transform.right();
 
     let horizonthal_directions = [Vec3::NEG_X, Vec3::X, Vec3::NEG_Z, Vec3::Z];
@@ -286,7 +287,7 @@ fn move_selected_grid_entity(
     let x_axis = x_axis.as_ivec3();
     let z_axis = IVec3::new(-x_axis.z, 0, x_axis.x);
 
-    let move_direction = if keyboard.just_pressed(KeyCode::W) {
+    if keyboard.just_pressed(KeyCode::W) {
         Some(-z_axis)
     } else if keyboard.just_pressed(KeyCode::A) {
         Some(-x_axis)
@@ -300,9 +301,22 @@ fn move_selected_grid_entity(
         Some(IVec3::Y)
     } else {
         None
-    };
+    }
+}
 
-    let Some(direction) = move_direction else {
+fn move_selected_grid_entity(
+    keyboard: Res<Input<KeyCode>>,
+    mouse_input: Res<Input<MouseButton>>,
+    mut level_instance: ResMut<LevelInstance>,
+    mut selection: Query<(&Selection, &mut GridEntity, &mut Transform)>,
+    camera: Query<&GlobalTransform, With<EditorCamera>>,
+) {
+    if mouse_input.pressed(MouseButton::Right) || !keyboard.pressed(KeyCode::LControl) {
+        return;
+    }
+
+    let camera_transform = camera.single();
+    let Some(direction) = select_move_direction(&keyboard, camera_transform) else {
         return;
     };
 
@@ -326,12 +340,13 @@ fn move_selected_grid_entity(
     for (old, _, _) in &moves {
         level_instance.set_empty(*old);
     }
+
     for (_, new, value) in moves {
         level_instance.mark_position_occupied(new, value);
     }
 }
 
-fn delete_selected_wall_system(
+fn delete_selected_entity_system(
     mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
     mut level_instance: ResMut<LevelInstance>,
@@ -353,7 +368,6 @@ fn delete_selected_wall_system(
 
 fn create_new_level(
     level_loaded_event: &mut EventWriter<LevelLoadedEvent>,
-    spawn_snake_event: &mut EventWriter<SpawnSnakeEvent>,
     levels: &mut Assets<LevelTemplate>,
     commands: &mut Commands,
 ) {
@@ -370,27 +384,19 @@ fn create_new_level(
     commands.insert_resource(LoadedLevel(levels.add(new_tempale)));
     commands.insert_resource(LevelInstance::new());
     level_loaded_event.send(LevelLoadedEvent);
-    spawn_snake_event.send(SpawnSnakeEvent);
 }
 
 fn create_new_level_on_enter_system(
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
     mut levels: ResMut<Assets<LevelTemplate>>,
     mut commands: Commands,
 ) {
-    create_new_level(
-        &mut level_loaded_event,
-        &mut spawn_snake_event,
-        &mut levels,
-        &mut commands,
-    );
+    create_new_level(&mut level_loaded_event, &mut levels, &mut commands);
 }
 
 fn create_new_level_system(
     keyboard: Res<Input<KeyCode>>,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
     mut levels: ResMut<Assets<LevelTemplate>>,
     mut commands: Commands,
     entities: Query<Entity, With<LevelEntity>>,
@@ -400,12 +406,7 @@ fn create_new_level_system(
     }
     despawn_entities::<LevelEntity>(&mut commands, entities);
 
-    create_new_level(
-        &mut level_loaded_event,
-        &mut spawn_snake_event,
-        &mut levels,
-        &mut commands,
-    );
+    create_new_level(&mut level_loaded_event, &mut levels, &mut commands);
 }
 
 #[allow(clippy::too_many_arguments)]

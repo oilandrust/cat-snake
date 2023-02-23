@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     game_constants_plugin::{FOOD_COLOR, SPIKE_COLOR},
-    snake_plugin::MaterialMeshBuilder,
+    snake_plugin::{Active, MaterialMeshBuilder, Snake, SnakeTemplate},
 };
 
 #[derive(Component)]
@@ -65,12 +65,42 @@ impl Movable for GridEntity {
     }
 }
 
+pub fn spawn_snake(
+    part_builder: &mut MaterialMeshBuilder,
+    commands: &mut Commands,
+    level_instance: &mut LevelInstance,
+    snake_template: &SnakeTemplate,
+    snake_index: i32,
+) -> Entity {
+    let mut spawn_command = commands.spawn((
+        Snake::new(snake_template, snake_index),
+        SpatialBundle { ..default() },
+        LevelEntity,
+        Active,
+    ));
+
+    spawn_command.with_children(|parent| {
+        for (index, part) in snake_template.iter().enumerate() {
+            parent.spawn(part_builder.build_part(part.0, snake_index, index));
+        }
+    });
+
+    for (position, _) in snake_template {
+        level_instance.mark_position_occupied(
+            *position,
+            LevelGridEntity::new(spawn_command.id(), EntityType::Snake),
+        );
+    }
+
+    spawn_command.id()
+}
+
 pub fn spawn_spike(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
-) {
+) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_spike_mesh(*position),
@@ -82,6 +112,8 @@ pub fn spawn_spike(
 
     level_instance
         .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Spike));
+
+    entity
 }
 
 pub fn spawn_wall(
@@ -90,7 +122,7 @@ pub fn spawn_wall(
     position: &IVec3,
     level_instance: &mut LevelInstance,
     assets: &GameAssets,
-) {
+) -> Entity {
     let ground_material = mesh_builder.materials.add(StandardMaterial {
         base_color: Color::rgb(0.8, 0.7, 0.6),
         base_color_texture: Some(assets.outline_texture.clone()),
@@ -108,12 +140,13 @@ pub fn spawn_wall(
             LevelEntity,
             GridEntity(*position),
             Wall,
-            PickableBundle::default(),
         ))
         .id();
 
     level_instance
         .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Wall));
+
+    entity
 }
 
 pub fn spawn_food(
@@ -121,19 +154,20 @@ pub fn spawn_food(
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
-) {
+) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_food_mesh(*position),
             GridEntity(*position),
             Food,
             LevelEntity,
-            PickableBundle::default(),
         ))
         .id();
 
     level_instance
         .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Food));
+
+    entity
 }
 
 pub fn spawn_box(
@@ -141,18 +175,19 @@ pub fn spawn_box(
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
-) {
+) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_box_mesh(*position),
             GridEntity(*position),
             Box,
             LevelEntity,
-            PickableBundle::default(),
         ))
         .id();
 
     level_instance.mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Box));
+
+    entity
 }
 
 pub fn spawn_goal(
@@ -160,7 +195,7 @@ pub fn spawn_goal(
     position: &IVec3,
     level_instance: &mut LevelInstance,
     assets: &GameAssets,
-) {
+) -> Entity {
     let entity = commands
         .spawn((
             PbrBundle {
@@ -179,6 +214,8 @@ pub fn spawn_goal(
 
     level_instance
         .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Goal));
+
+    entity
 }
 
 pub fn spawn_trigger(
@@ -186,7 +223,7 @@ pub fn spawn_trigger(
     commands: &mut Commands,
     position: &IVec3,
     level_instance: &mut LevelInstance,
-) {
+) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_trigger_mesh(*position),
@@ -199,6 +236,8 @@ pub fn spawn_trigger(
 
     level_instance
         .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Trigger));
+
+    entity
 }
 
 impl<'a> MaterialMeshBuilder<'a> {

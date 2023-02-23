@@ -21,7 +21,7 @@ use super::{
     movement_plugin::{GravityFall, SnakeReachGoalEvent},
     movement_plugin::{LevelExitAnim, MovementStages, SnakeExitedLevelEvent},
     snake_plugin::MaterialMeshBuilder,
-    snake_plugin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
+    snake_plugin::{Active, SelectedSnake, Snake},
     undo::SnakeHistory,
 };
 
@@ -177,7 +177,6 @@ fn notify_level_loaded_system(
     mut commands: Commands,
     level_loading: Res<LoadingLevel>,
     asset_server: Res<AssetServer>,
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
     mut level_loaded_event: EventWriter<LevelLoadedEvent>,
 ) {
     let load_state = asset_server.get_load_state(&level_loading.0);
@@ -189,7 +188,6 @@ fn notify_level_loaded_system(
             commands.insert_resource(SnakeHistory::default());
             commands.insert_resource(LevelInstance::new());
 
-            spawn_snake_event.send(SpawnSnakeEvent);
             level_loaded_event.send(LevelLoadedEvent);
         }
         bevy::asset::LoadState::Failed => panic!("Failed loading level"),
@@ -324,6 +322,20 @@ pub fn spawn_level_entities_system(
     if let Some(goal_position) = level_template.goal {
         spawn_goal(&mut commands, &goal_position, &mut level_instance, &assets);
     };
+
+    for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
+        let entity = spawn_snake(
+            &mut mesh_builder,
+            &mut commands,
+            &mut level_instance,
+            snake_template,
+            snake_index as i32,
+        );
+
+        if snake_index == 0 {
+            commands.entity(entity).insert(SelectedSnake);
+        }
+    }
 }
 
 pub fn clear_level_system(
