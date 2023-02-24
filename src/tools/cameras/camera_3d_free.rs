@@ -56,6 +56,14 @@ impl Default for FlycamControls {
     }
 }
 
+impl FlycamControls {
+    pub fn set_transform(&mut self, transform: &Transform) {
+        let (yaw, pitch, _) = transform.rotation.to_euler(EulerRot::YXZ);
+        self.yaw = yaw;
+        self.pitch = pitch;
+    }
+}
+
 fn camera_movement(
     mut cam: Query<(&FlycamControls, &mut Transform)>,
     time: Res<Time>,

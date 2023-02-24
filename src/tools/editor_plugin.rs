@@ -121,7 +121,8 @@ fn init_level_instance_system(mut commands: Commands) {
                     is_active: true,
                     ..default()
                 },
-                transform: Transform::from_xyz(0.0, 2.0, 5.0),
+                transform: Transform::from_translation(15.0 * Vec3::Y + 12.0 * Vec3::Z)
+                    .looking_at(Vec3::ZERO, Vec3::Y),
                 ..Camera3dBundle::default()
             },
             PickingCameraBundle::default(),
@@ -240,16 +241,13 @@ fn add_entity_on_click_system(
             &position,
             &mut level_instance,
         ),
-        EntityType::Snake => {
-            let snake_template = vec![(position, IVec3::X)];
-            spawn_snake(
-                &mut mesh_builder,
-                &mut commands,
-                &mut level_instance,
-                &snake_template,
-                snakes.iter().len() as i32,
-            )
-        }
+        EntityType::Snake => spawn_snake(
+            &mut mesh_builder,
+            &mut commands,
+            &mut level_instance,
+            &vec![(position, IVec3::X), (position - IVec3::X, IVec3::X)],
+            snakes.iter().len() as i32,
+        ),
         EntityType::Goal => spawn_goal(&mut commands, &position, &mut level_instance, &assets),
     };
 

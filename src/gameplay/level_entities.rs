@@ -77,6 +77,7 @@ pub fn spawn_snake(
         SpatialBundle { ..default() },
         LevelEntity,
         Active,
+        Name::new("Snake"),
     ));
 
     spawn_command.with_children(|parent| {
@@ -107,6 +108,7 @@ pub fn spawn_spike(
             GridEntity(*position),
             Spike,
             LevelEntity,
+            Name::new("Spike"),
         ))
         .id();
 
@@ -140,6 +142,7 @@ pub fn spawn_wall(
             LevelEntity,
             GridEntity(*position),
             Wall,
+            Name::new("Wall"),
         ))
         .id();
 
@@ -161,6 +164,7 @@ pub fn spawn_food(
             GridEntity(*position),
             Food,
             LevelEntity,
+            Name::new("Food"),
         ))
         .id();
 
@@ -209,6 +213,7 @@ pub fn spawn_goal(
             LevelEntity,
             PickableBundle::default(),
             NotShadowCaster,
+            Name::new("Goal"),
         ))
         .id();
 
@@ -231,6 +236,7 @@ pub fn spawn_trigger(
             Trigger,
             LevelEntity,
             PickableBundle::default(),
+            Name::new("Trigger"),
         ))
         .id();
 

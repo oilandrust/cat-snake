@@ -3,23 +3,34 @@ use bevy::{
     math::Vec3A,
     prelude::*,
 };
-use iyes_loopless::prelude::ConditionSet;
+use iyes_loopless::prelude::{AppLooplessStateExt, ConditionSet};
 
 use crate::{level::level_instance::LevelInstance, GameState};
+
+use super::level_entities::LevelEntity;
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(
-            ConditionSet::new()
-                .run_in_state(GameState::Game)
-                .run_if_resource_exists::<LevelInstance>()
-                .with_system(camera_zoom_scroll_system)
-                .with_system(camera_pan_system)
-                .into(),
-        );
+        app.add_enter_system(GameState::Game, setup_camera_system)
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .with_system(camera_zoom_scroll_system)
+                    .with_system(camera_pan_system)
+                    .into(),
+            );
     }
+}
+
+pub fn setup_camera_system(mut commands: Commands) {
+    commands.spawn((
+        Camera3dBundle::default(),
+        LevelEntity,
+        Name::new("Game Camera"),
+    ));
 }
 
 pub fn camera_zoom_scroll_system(

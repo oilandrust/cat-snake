@@ -12,6 +12,7 @@ use crate::{
         level_template::{LevelTemplate, LoadingLevel},
         levels::*,
     },
+    tools::cameras::camera_3d_free::FlycamControls,
     Assets, GameAssets, GameState,
 };
 
@@ -45,7 +46,6 @@ pub struct Water;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel, StageLabel)]
 pub enum LevelStages {
     LoadLevelStage,
-    PreloadLevel,
     CheckLevelCondition,
 }
 
@@ -59,8 +59,7 @@ impl Plugin for LevelPlugin {
             .add_event::<StartLevelEventWithLevelAssetPath>()
             .add_event::<LevelLoadedEvent>()
             .add_event::<ClearLevelEvent>()
-            .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+            .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .with_system(load_level_with_index_system)
@@ -68,8 +67,7 @@ impl Plugin for LevelPlugin {
                     .with_system(load_level_system)
                     .into(),
             )
-            .add_system_to_stage(
-                CoreStage::PreUpdate,
+            .add_system(
                 notify_level_loaded_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LoadingLevel>()
@@ -80,8 +78,7 @@ impl Plugin for LevelPlugin {
                 spawn_level_entities_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LoadedLevel>()
-                    .run_if_resource_exists::<LevelInstance>()
-                    .after(LevelStages::PreloadLevel),
+                    .run_if_resource_exists::<LevelInstance>(),
             )
             // .add_system_to_stage(
             //     CoreStage::PostUpdate,
@@ -97,25 +94,22 @@ impl Plugin for LevelPlugin {
                     .run_if_resource_exists::<LevelInstance>()
                     .label(MovementStages::SmoothMovement),
             )
+            .add_system(
+                start_snake_exit_level_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>(),
+            )
+            .add_system(
+                finish_snake_exit_level_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>(),
+            )
             .add_system_to_stage(
                 CoreStage::Last,
                 check_for_level_completion_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
                     .label(LevelStages::CheckLevelCondition),
-            )
-            .add_system_to_stage(
-                CoreStage::Update,
-                start_snake_exit_level_system
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .after(LevelStages::CheckLevelCondition),
-            )
-            .add_system_to_stage(
-                CoreStage::Update,
-                finish_snake_exit_level_system
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system_to_stage(
                 CoreStage::Last,
@@ -210,6 +204,7 @@ pub fn spawn_level_entities_system(
     assets: Res<GameAssets>,
     loaded_level: Res<LoadedLevel>,
     level_templates: ResMut<Assets<LevelTemplate>>,
+    mut camera: Query<(&mut Transform, Option<&mut FlycamControls>), With<Camera>>,
 ) {
     if level_loaded_event.is_empty() {
         return;
@@ -230,14 +225,13 @@ pub fn spawn_level_entities_system(
 
     let center = min.as_vec3() + 0.5 * (max - min).as_vec3();
 
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_translation(center + 15.0 * Vec3::Y + 12.0 * Vec3::Z)
-                .looking_at(center, Vec3::Y),
-            ..default()
-        },
-        LevelEntity,
-    ));
+    let (mut camera_transform, fly_camera) = camera.single_mut();
+    *camera_transform = Transform::from_translation(center + 15.0 * Vec3::Y + 12.0 * Vec3::Z)
+        .looking_at(center, Vec3::Y);
+
+    if let Some(mut fly_camera) = fly_camera {
+        fly_camera.set_transform(&camera_transform);
+    }
 
     // light
     let size = 25.0;
@@ -341,7 +335,7 @@ pub fn spawn_level_entities_system(
 pub fn clear_level_system(
     mut event_clear_level: EventReader<ClearLevelEvent>,
     mut commands: Commands,
-    query: Query<Entity, With<LevelEntity>>,
+    query: Query<Entity, (With<LevelEntity>, Without<Camera>)>,
 ) {
     if event_clear_level.iter().next().is_none() {
         return;
