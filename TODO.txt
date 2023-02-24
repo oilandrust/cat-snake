@@ -1,21 +1,16 @@
 Cleanup:
     * Fix high CPU usage
     * Fix and test game mode and automated tests
-    * Dead frames
 
 Web:
-    * Asset loading
+    * Long pipeline initialization
 
 Game:
-    * Button to unlock level goal.
-    * Level goal active animation/meshes
-    * Box entity pushable
-    * Fix auto up: not trigger when going down
     
 Editor:
-    * Click to add wall
-        * Fix imprecision
+    * Move Snake
 
 Bugs:
     * Fall on goal
     * Goal not deactivated on undo
+    * Undo push snake

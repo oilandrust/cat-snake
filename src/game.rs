@@ -189,21 +189,14 @@ fn load_assets(
         outline_texture: asset_server.load("outline.png"),
         cube_mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
         goal_active_mesh: asset_server.load("goal.gltf#Mesh0/Primitive0"),
-        goal_inactive_mesh: meshes.add(Mesh::from(shape::Box {
-            min_x: -0.4,
-            max_x: 0.4,
-            min_y: -0.5,
-            max_y: -0.3,
-            min_z: -0.4,
-            max_z: 0.4,
-        })),
+        goal_inactive_mesh: asset_server.load("goal_inactive.gltf#Mesh0/Primitive0"),
         goal_active_material: materials.add(StandardMaterial {
             base_color: Color::rgba_u8(255, 255, 153, 150),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
             ..default()
         }),
-        goal_inactive_material: materials.add(Color::BLACK.into()),
+        goal_inactive_material: materials.add(Color::SILVER.into()),
         default_material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.8, 0.7, 0.6),
             ..default()

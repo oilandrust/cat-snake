@@ -299,6 +299,10 @@ pub fn update_movable_transforms_system(
     )>,
 ) {
     for (grid_entity, mut transform, pushed_anim, fall) in &mut moving_entitites {
+        if pushed_anim.is_none() && fall.is_none() {
+            continue;
+        }
+
         let fall_offset = fall.map_or(Vec3::ZERO, |gravity_fall| gravity_fall.relative_z * Vec3::Y);
 
         let push_offset = pushed_anim.map_or(Vec3::ZERO, |command| {

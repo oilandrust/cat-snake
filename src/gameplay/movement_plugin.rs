@@ -468,18 +468,20 @@ pub fn activate_trigger_on_move_system(
     level_instance: Res<LevelInstance>,
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
     mut commands: Commands,
-    triggers: Query<(Entity, &GridEntity, Option<&Active>), With<Trigger>>,
+    mut triggers: Query<(Entity, &mut Transform, &GridEntity, Option<&Active>), With<Trigger>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
     }
 
-    for (trigger_entity, trigger, active) in &triggers {
+    for (trigger_entity, mut transform, trigger, active) in &mut triggers {
         let has_load = level_instance.is_movable(trigger.0).is_some();
 
         if has_load && active.is_none() {
             commands.entity(trigger_entity).insert(Active);
+            transform.translation -= 0.18 * Vec3::Y;
         } else if !has_load && active.is_some() {
+            transform.translation += 0.18 * Vec3::Y;
             commands.entity(trigger_entity).remove::<Active>();
         }
     }
