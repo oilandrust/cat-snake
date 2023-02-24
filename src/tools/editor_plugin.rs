@@ -1,6 +1,6 @@
 use std::{fs::File, io::Write};
 
-use bevy::{prelude::*, tasks::IoTaskPool};
+use bevy::{gltf::Gltf, prelude::*, tasks::IoTaskPool};
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -185,6 +185,7 @@ fn add_entity_on_click_system(
     mut level_instance: ResMut<LevelInstance>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    gltfs: Res<Assets<Gltf>>,
     snakes: Query<&Snake>,
     assets: Res<GameAssets>,
 ) {
@@ -248,7 +249,13 @@ fn add_entity_on_click_system(
             &vec![(position, IVec3::X), (position - IVec3::X, IVec3::X)],
             snakes.iter().len() as i32,
         ),
-        EntityType::Goal => spawn_goal(&mut commands, &position, &mut level_instance, &assets),
+        EntityType::Goal => spawn_goal(
+            &mut commands,
+            &position,
+            &mut level_instance,
+            &assets,
+            &gltfs,
+        ),
     };
 
     commands.entity(id).insert(PickableBundle::default());

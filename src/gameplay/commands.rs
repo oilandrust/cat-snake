@@ -149,16 +149,16 @@ impl<'a> PlayerMoveCommand<'a> {
         );
 
         // Move the other entity.
-        if let Some((entity, movable)) = &mut self.pushed_entity {
+        if let Some((pushed_entity, movable)) = &mut self.pushed_entity {
             let walkable_updates =
                 self.level_instance
-                    .move_entity(*movable, *entity, self.direction);
+                    .move_entity(*movable, *pushed_entity, self.direction);
 
             movable.translate(self.direction);
 
             self.history.push_with_updates(
                 MoveHistoryEvent::PassiveEntityMove(self.direction),
-                *entity,
+                *pushed_entity,
                 walkable_updates,
             );
         };

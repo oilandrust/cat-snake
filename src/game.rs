@@ -1,4 +1,5 @@
 use args::Args;
+use bevy::gltf::Gltf;
 use bevy::prelude::*;
 use bevy_kira_audio::{AudioPlugin, AudioSource};
 use bevy_tweening::TweeningPlugin;
@@ -172,10 +173,10 @@ pub struct GameAssets {
     pub outline_texture: Handle<Image>,
     pub cube_mesh: Handle<Mesh>,
     pub default_material: Handle<StandardMaterial>,
-    pub goal_active_mesh: Handle<Mesh>,
-    pub goal_inactive_mesh: Handle<Mesh>,
-    pub goal_active_material: Handle<StandardMaterial>,
-    pub goal_inactive_material: Handle<StandardMaterial>,
+    pub goal_light_cone_mesh: Handle<Mesh>,
+    pub goal_light_cone_material: Handle<StandardMaterial>,
+    pub goal_active_mesh: Handle<Gltf>,
+    pub goal_inactive_mesh: Handle<Gltf>,
 }
 
 fn load_assets(
@@ -188,15 +189,15 @@ fn load_assets(
         move_effect: asset_server.load("move_effect.mp3"),
         outline_texture: asset_server.load("outline.png"),
         cube_mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        goal_active_mesh: asset_server.load("goal.gltf#Mesh0/Primitive0"),
-        goal_inactive_mesh: asset_server.load("goal_inactive.gltf#Mesh0/Primitive0"),
-        goal_active_material: materials.add(StandardMaterial {
+        goal_light_cone_mesh: asset_server.load("goal.gltf#Mesh0/Primitive0"),
+        goal_inactive_mesh: asset_server.load("goal_inactive.gltf"),
+        goal_active_mesh: asset_server.load("goal_active.gltf"),
+        goal_light_cone_material: materials.add(StandardMaterial {
             base_color: Color::rgba_u8(255, 255, 153, 150),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
             ..default()
         }),
-        goal_inactive_material: materials.add(Color::SILVER.into()),
         default_material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.8, 0.7, 0.6),
             ..default()

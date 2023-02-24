@@ -1,6 +1,6 @@
 use core::slice;
 
-use bevy::{pbr::NotShadowCaster, prelude::*};
+use bevy::{gltf::Gltf, pbr::NotShadowCaster, prelude::*};
 
 use crate::{
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
@@ -199,12 +199,12 @@ pub fn spawn_goal(
     position: &IVec3,
     level_instance: &mut LevelInstance,
     assets: &GameAssets,
+    assets_gltf: &Assets<Gltf>,
 ) -> Entity {
     let entity = commands
         .spawn((
-            PbrBundle {
-                mesh: assets.goal_inactive_mesh.clone(),
-                material: assets.goal_inactive_material.clone(),
+            SceneBundle {
+                scene: assets_gltf.get(&assets.goal_inactive_mesh).unwrap().scenes[0].clone(),
                 transform: Transform::from_translation(position.as_vec3()),
                 ..default()
             },

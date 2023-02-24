@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{gltf::Gltf, pbr::NotShadowCaster, prelude::*};
 
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionHelpers, ConditionSet, IntoConditionalSystem},
@@ -201,6 +201,7 @@ pub fn spawn_level_entities_system(
     mut level_instance: ResMut<LevelInstance>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    assets_gltf: Res<Assets<Gltf>>,
     assets: Res<GameAssets>,
     loaded_level: Res<LoadedLevel>,
     level_templates: ResMut<Assets<LevelTemplate>>,
@@ -314,7 +315,13 @@ pub fn spawn_level_entities_system(
     }
 
     if let Some(goal_position) = level_template.goal {
-        spawn_goal(&mut commands, &goal_position, &mut level_instance, &assets);
+        spawn_goal(
+            &mut commands,
+            &goal_position,
+            &mut level_instance,
+            &assets,
+            &assets_gltf,
+        );
     };
 
     for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
@@ -342,7 +349,7 @@ pub fn clear_level_system(
     }
 
     for entity in &query {
-        commands.entity(entity).despawn();
+        commands.entity(entity).despawn_recursive();
     }
 
     commands.remove_resource::<LevelInstance>();
@@ -367,35 +374,44 @@ fn _activate_goal_when_all_food_eaten_system(
     }
 }
 
+#[derive(Component)]
+struct LightCone;
+
 #[allow(clippy::type_complexity)]
 fn activate_goal_when_trigger_pressed_system(
     mut commands: Commands,
     triggers_query: Query<&Trigger, Without<Active>>,
     assets: Res<GameAssets>,
-    mut goal_query: Query<
-        (
-            Entity,
-            Option<&Active>,
-            &mut Handle<Mesh>,
-            &mut Handle<StandardMaterial>,
-        ),
-        With<Goal>,
-    >,
+    gltfs: Res<Assets<Gltf>>,
+    mut goal_query: Query<(Entity, Option<&Active>, &mut Handle<Scene>), With<Goal>>,
+    light_cone: Query<Entity, With<LightCone>>,
 ) {
-    let Ok((goal_entity, active, mut mesh, mut material)) = goal_query.get_single_mut() else {
+    let Ok((goal_entity, active, mut scene)) = goal_query.get_single_mut() else {
         return;
     };
 
     if triggers_query.is_empty() {
         if active.is_none() {
             commands.entity(goal_entity).insert(Active);
-            *mesh = assets.goal_active_mesh.clone();
-            *material = assets.goal_active_material.clone();
+            *scene = gltfs.get(&assets.goal_active_mesh).unwrap().scenes[0].clone();
+
+            commands.entity(goal_entity).with_children(|parent| {
+                parent.spawn((
+                    PbrBundle {
+                        mesh: assets.goal_light_cone_mesh.clone(),
+                        material: assets.goal_light_cone_material.clone(),
+                        ..default()
+                    },
+                    LightCone,
+                    NotShadowCaster,
+                ));
+            });
         }
     } else if active.is_some() {
         commands.entity(goal_entity).remove::<Active>();
-        *mesh = assets.goal_inactive_mesh.clone();
-        *material = assets.goal_inactive_material.clone();
+        *scene = gltfs.get(&assets.goal_inactive_mesh).unwrap().scenes[0].clone();
+
+        commands.entity(light_cone.single()).despawn();
     }
 }
 
