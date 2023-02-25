@@ -290,19 +290,22 @@ pub fn update_snake_transforms_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_movable_transforms_system(
-    mut moving_entitites: Query<(
-        &GridEntity,
-        &mut Transform,
-        Option<&PushedAnim>,
-        Option<&GravityFall>,
-    )>,
+    mut moving_entitites: Query<
+        (
+            &GridEntity,
+            &mut Transform,
+            Option<&PushedAnim>,
+            Option<&GravityFall>,
+        ),
+        Or<(
+            Changed<GridEntity>,
+            Or<(With<PushedAnim>, With<GravityFall>)>,
+        )>,
+    >,
 ) {
     for (grid_entity, mut transform, pushed_anim, fall) in &mut moving_entitites {
-        if pushed_anim.is_none() && fall.is_none() {
-            continue;
-        }
-
         let fall_offset = fall.map_or(Vec3::ZERO, |gravity_fall| gravity_fall.relative_z * Vec3::Y);
 
         let push_offset = pushed_anim.map_or(Vec3::ZERO, |command| {

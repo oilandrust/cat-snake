@@ -358,6 +358,7 @@ impl LevelInstance {
                 current_position.z += dz;
                 t_max_z += t_delta_z;
             }
+
             if t_max_x > 1.0 && t_max_y > 1.0 && t_max_z > 1.0 {
                 break;
             }

@@ -466,11 +466,12 @@ pub fn grow_snake_on_move_system(
 
 pub fn activate_trigger_on_move_system(
     level_instance: Res<LevelInstance>,
-    mut snake_moved_event: EventReader<SnakeMovedEvent>,
+    snake_moved_event: EventReader<SnakeMovedEvent>,
+    undo_event: EventReader<UndoEvent>,
     mut commands: Commands,
     mut triggers: Query<(Entity, &mut Transform, &GridEntity, Option<&Active>), With<Trigger>>,
 ) {
-    if snake_moved_event.iter().next().is_none() {
+    if snake_moved_event.is_empty() && undo_event.is_empty() {
         return;
     }
 

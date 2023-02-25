@@ -156,7 +156,6 @@ pub fn run(app: &mut App, args: &Args) {
                     ..Default::default()
                 }),
         )
-        .add_asset::<bevy::render::prelude::Mesh>()
         .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
         .add_plugin(MenuPlugin)
         .add_plugin(MainMenuPlugin)

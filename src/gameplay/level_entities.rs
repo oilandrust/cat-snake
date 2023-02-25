@@ -1,6 +1,6 @@
 use core::slice;
 
-use bevy::{gltf::Gltf, pbr::NotShadowCaster, prelude::*};
+use bevy::{gltf::Gltf, prelude::*};
 
 use crate::{
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
@@ -211,8 +211,6 @@ pub fn spawn_goal(
             GridEntity(*position),
             Goal,
             LevelEntity,
-            PickableBundle::default(),
-            NotShadowCaster,
             Name::new("Goal"),
         ))
         .id();

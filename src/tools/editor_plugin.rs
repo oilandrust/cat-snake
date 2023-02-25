@@ -1,6 +1,7 @@
 use std::{fs::File, io::Write};
 
 use bevy::{gltf::Gltf, prelude::*, tasks::IoTaskPool};
+use bevy_prototype_debug_lines::DebugLinesMesh;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -15,7 +16,7 @@ use crate::{
             clear_level_runtime_resources_system, spawn_level_entities_system,
             CurrentLevelAssetPath, LevelLoadedEvent,
         },
-        snake_plugin::{update_snake_transforms_system, MaterialMeshBuilder, Snake, SnakePart},
+        snake_plugin::{update_snake_transforms_system, MaterialMeshBuilder, Snake},
     },
     level::{
         level_instance::{EntityType, LevelInstance},
@@ -77,6 +78,7 @@ impl Plugin for EditorPlugin {
                     .with_system(choose_entity_to_add_system)
                     .with_system(add_pickable_to_level_entities_system)
                     .with_system(add_entity_on_click_system)
+                    .with_system(select_parent_level_entity_system)
                     .with_system(delete_selected_entity_system)
                     .with_system(create_new_level_system)
                     .with_system(update_snake_transforms_system)
@@ -261,16 +263,43 @@ fn add_entity_on_click_system(
     commands.entity(id).insert(PickableBundle::default());
 }
 
+#[allow(clippy::type_complexity)]
 fn add_pickable_to_level_entities_system(
     mut commands: Commands,
-    grid_entities: Query<Entity, (With<GridEntity>, Without<PickableMesh>)>,
-    snake_parts: Query<Entity, (With<SnakePart>, Without<PickableMesh>)>,
+    grid_entities: Query<
+        Entity,
+        (
+            Or<(With<Handle<Mesh>>, With<LevelEntity>)>,
+            Without<PickableMesh>,
+            Without<DebugLinesMesh>,
+        ),
+    >,
 ) {
     for entity in &grid_entities {
         commands.entity(entity).insert(PickableBundle::default());
     }
-    for entity in &snake_parts {
-        commands.entity(entity).insert(PickableBundle::default());
+}
+
+#[allow(clippy::type_complexity)]
+fn select_parent_level_entity_system(
+    changed_selection: Query<(Entity, &Selection), (Changed<Selection>, Without<LevelEntity>)>,
+    parents: Query<&Parent>,
+    mut level_entitites: Query<&mut Selection, With<LevelEntity>>,
+) {
+    for (entity, selection) in &changed_selection {
+        if !selection.selected() {
+            continue;
+        }
+
+        let mut current_parent = parents.get(entity).ok();
+        while let Some(parent) = current_parent {
+            if let Ok(mut selection) = level_entitites.get_mut(parent.get()) {
+                selection.set_selected(true);
+                break;
+            }
+
+            current_parent = parents.get(parent.get()).ok();
+        }
     }
 }
 
