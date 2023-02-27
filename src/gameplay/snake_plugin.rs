@@ -5,7 +5,6 @@ use std::collections::VecDeque;
 use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_plugin::SNAKE_COLORS,
-    gameplay::level_entities::LevelEntity,
     gameplay::movement_plugin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
@@ -79,7 +78,6 @@ pub struct SnakePart {
 #[derive(Bundle)]
 pub struct SnakePartBundle {
     pub part: SnakePart,
-    pub level_entity: LevelEntity,
     pub shape: PbrBundle,
 }
 
@@ -109,7 +107,6 @@ impl<'a> MaterialMeshBuilder<'a> {
                 snake_index,
                 part_index,
             },
-            level_entity: LevelEntity,
         }
     }
 }
@@ -149,6 +146,10 @@ impl Snake {
 
     pub fn len(&self) -> usize {
         self.parts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn head_position(&self) -> IVec3 {
@@ -313,7 +314,7 @@ pub fn update_movable_transforms_system(
             initial_offset.lerp(Vec3::ZERO, command.lerp_time)
         });
 
-        transform.translation = grid_entity.0.as_vec3() + push_offset + fall_offset;
+        transform.translation = grid_entity.position.as_vec3() + push_offset + fall_offset;
     }
 }
 
@@ -432,7 +433,7 @@ fn despawn_snake_system(
     }
 }
 
-fn despawn_snake_part_system(
+pub fn despawn_snake_part_system(
     mut despawn_snake_part_event: EventReader<DespawnSnakePartEvent>,
     mut commands: Commands,
     parts_query: Query<(Entity, &SnakePart)>,

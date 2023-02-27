@@ -7,7 +7,8 @@ use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_plugin::*;
 use gameplay::level_entities::LevelEntity;
 use gameplay::level_plugin::{
-    ClearLevelEvent, LevelPlugin, StartLevelEventWithIndex, StartTestLevelEventWithIndex,
+    ClearLevelEvent, CurrentLevelMetadata, LevelPlugin, StartLevelEventWithIndex,
+    StartLevelEventWithLevelAssetPath,
 };
 use gameplay::movement_plugin::MovementPlugin;
 use gameplay::snake_plugin::SnakePlugin;
@@ -23,11 +24,11 @@ use tools::dev_tools_plugin::DevToolsPlugin;
 use tools::editor_plugin::{EditorPlugin, ResumeFromEditor};
 
 pub mod args;
-mod gameplay;
-mod level;
-mod menus;
-mod tools;
-mod utils;
+pub mod gameplay;
+pub mod level;
+pub mod menus;
+pub mod tools;
+pub mod utils;
 
 // Don't touch this piece, needed for Web
 #[cfg(target_arch = "wasm32")]
@@ -81,10 +82,11 @@ impl Plugin for GamePlugin {
 }
 
 fn enter_game_system(
+    mut commands: Commands,
     args: Res<Args>,
     next_level: Res<NextLevel>,
     // mut start_test_case_event: EventWriter<StartTestCaseEventWithIndex>,
-    mut start_test_level_event: EventWriter<StartTestLevelEventWithIndex>,
+    mut start_test_level_event: EventWriter<StartLevelEventWithLevelAssetPath>,
     mut start_level_event: EventWriter<StartLevelEventWithIndex>,
 ) {
     match args.command {
@@ -93,8 +95,14 @@ fn enter_game_system(
             // start_test_case_event.send(StartTestCaseEventWithIndex(start_test_case));
         }
         _ => {
-            if let Some(test_level) = args.test_level {
-                start_test_level_event.send(StartTestLevelEventWithIndex(test_level));
+            if let Some(test_level) = &args.test_level {
+                let level_asset_path = format!("levels/{}", test_level);
+                commands.insert_resource(CurrentLevelMetadata {
+                    id: None,
+                    asset_path: level_asset_path.clone(),
+                });
+
+                start_test_level_event.send(StartLevelEventWithLevelAssetPath(level_asset_path));
                 return;
             }
         }
@@ -176,6 +184,7 @@ pub struct GameAssets {
     pub goal_light_cone_material: Handle<StandardMaterial>,
     pub goal_active_mesh: Handle<Gltf>,
     pub goal_inactive_mesh: Handle<Gltf>,
+    pub kitchen_model: Handle<Gltf>,
 }
 
 fn load_assets(
@@ -191,6 +200,7 @@ fn load_assets(
         goal_light_cone_mesh: asset_server.load("goal.gltf#Mesh0/Primitive0"),
         goal_inactive_mesh: asset_server.load("goal_inactive.gltf"),
         goal_active_mesh: asset_server.load("goal_active.gltf"),
+        kitchen_model: asset_server.load("kitchen.gltf"),
         goal_light_cone_material: materials.add(StandardMaterial {
             base_color: Color::rgba_u8(255, 255, 153, 150),
             alpha_mode: AlphaMode::Blend,

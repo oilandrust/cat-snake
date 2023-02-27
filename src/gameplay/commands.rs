@@ -165,9 +165,9 @@ impl<'a> PlayerMoveCommand<'a> {
 
         // Consume food.
         if let Some(food) = &self.food {
-            let walkable_updates = self.level_instance.eat_food(food.0);
+            let walkable_updates = self.level_instance.eat_food(food.position);
             self.history.push_with_updates(
-                MoveHistoryEvent::Eat(food.0),
+                MoveHistoryEvent::Eat(food.position),
                 LevelGridEntity::new(self.entity, EntityType::Food),
                 walkable_updates,
             );

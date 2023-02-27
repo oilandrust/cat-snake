@@ -14,13 +14,16 @@ use crate::{
         level_entities::*,
         level_plugin::{
             clear_level_runtime_resources_system, spawn_level_entities_system,
-            CurrentLevelAssetPath, LevelLoadedEvent,
+            CurrentLevelMetadata, LevelLoadedEvent,
         },
-        snake_plugin::{update_snake_transforms_system, MaterialMeshBuilder, Snake},
+        snake_plugin::{
+            despawn_snake_part_system, update_snake_transforms_system, DespawnSnakePartEvent,
+            MaterialMeshBuilder, Snake, SnakePart,
+        },
     },
     level::{
-        level_instance::{EntityType, LevelInstance},
-        level_template::{LevelTemplate, LoadedLevel, LoadingLevel},
+        level_instance::{EntityType, LevelGridEntity, LevelInstance},
+        level_template::{EntityTemplate, LevelTemplate, LoadedLevel, LoadingLevel, Model},
     },
     tools::{
         cameras::{camera_3d_free, EditorCamera},
@@ -60,7 +63,7 @@ impl Plugin for EditorPlugin {
             .add_enter_system(
                 GameState::Editor,
                 create_new_level_on_enter_system
-                    .run_unless_resource_exists::<CurrentLevelAssetPath>(),
+                    .run_unless_resource_exists::<CurrentLevelMetadata>(),
             )
             .add_exit_system(GameState::Editor, despawn_with_system::<LevelEntity>)
             .add_exit_system(GameState::Editor, clear_level_runtime_resources_system)
@@ -83,12 +86,15 @@ impl Plugin for EditorPlugin {
                     .with_system(create_new_level_system)
                     .with_system(update_snake_transforms_system)
                     .with_system(move_selected_grid_entity)
+                    .with_system(move_selected_snake_system)
+                    .with_system(resize_selected_snake_system)
+                    .with_system(despawn_snake_part_system)
                     .into(),
             )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Editor)
-                    .run_if_resource_exists::<CurrentLevelAssetPath>()
+                    .run_if_resource_exists::<CurrentLevelMetadata>()
                     .with_system(save_level_system)
                     .with_system(stop_editor_system)
                     .into(),
@@ -141,7 +147,7 @@ pub struct ResumeFromEditor;
 fn stop_editor_system(
     keyboard: Res<Input<KeyCode>>,
     mut commands: Commands,
-    current_level_asset_path: Res<CurrentLevelAssetPath>,
+    level_meta: Res<CurrentLevelMetadata>,
     asset_server: Res<AssetServer>,
     editor_camera: Query<Entity, With<EditorCamera>>,
 ) {
@@ -150,7 +156,7 @@ fn stop_editor_system(
     }
 
     commands.insert_resource(ResumeFromEditor);
-    commands.insert_resource(LoadingLevel(asset_server.load(&current_level_asset_path.0)));
+    commands.insert_resource(LoadingLevel(asset_server.load(&level_meta.asset_path)));
     commands.insert_resource(NextState(GameState::Game));
     commands.entity(editor_camera.single()).despawn();
 }
@@ -362,12 +368,12 @@ fn move_selected_grid_entity(
         }
 
         moves.push((
-            grid_entity.0,
-            grid_entity.0 + direction,
-            *level_instance.get(grid_entity.0).unwrap(),
+            grid_entity.position,
+            grid_entity.position + direction,
+            *level_instance.get(grid_entity.position).unwrap(),
         ));
 
-        grid_entity.0 += direction;
+        grid_entity.position += direction;
         transform.translation += direction.as_vec3();
     }
 
@@ -377,6 +383,101 @@ fn move_selected_grid_entity(
 
     for (_, new, value) in moves {
         level_instance.mark_position_occupied(new, value);
+    }
+}
+
+fn move_selected_snake_system(
+    keyboard: Res<Input<KeyCode>>,
+    mouse_input: Res<Input<MouseButton>>,
+    mut level_instance: ResMut<LevelInstance>,
+    mut selection: Query<(Entity, &Selection, &mut Snake, &mut Transform)>,
+    camera: Query<&GlobalTransform, With<EditorCamera>>,
+) {
+    if mouse_input.pressed(MouseButton::Right) || !keyboard.pressed(KeyCode::LControl) {
+        return;
+    }
+
+    let camera_transform = camera.single();
+    let Some(direction) = select_move_direction(&keyboard, camera_transform) else {
+        return;
+    };
+
+    let mut moves = Vec::with_capacity(selection.iter().len());
+
+    for (entity, selection, mut snake, mut transform) in &mut selection {
+        if !selection.selected() || direction == -snake.head_direction() {
+            continue;
+        }
+
+        for position in snake.positions() {
+            moves.push((
+                *position,
+                *position + direction,
+                LevelGridEntity::new(entity, EntityType::Snake),
+            ));
+        }
+
+        snake.move_forward(direction);
+        transform.translation += direction.as_vec3();
+    }
+
+    for (old, _, _) in &moves {
+        level_instance.set_empty(*old);
+    }
+
+    for (_, new, value) in moves {
+        level_instance.mark_position_occupied(new, value);
+    }
+}
+
+fn resize_selected_snake_system(
+    mut commands: Commands,
+    keyboard: Res<Input<KeyCode>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut level_instance: ResMut<LevelInstance>,
+    mut selection: Query<(Entity, &Selection, &mut Snake)>,
+    mut despawn_snake_part: EventWriter<DespawnSnakePartEvent>,
+) {
+    let mut mesh_builder = MaterialMeshBuilder {
+        meshes: meshes.as_mut(),
+        materials: materials.as_mut(),
+    };
+
+    for (entity, selection, mut snake) in &mut selection {
+        if !selection.selected() {
+            continue;
+        }
+
+        if keyboard.just_pressed(KeyCode::Equals) {
+            snake.grow();
+
+            commands.entity(entity).with_children(|parent| {
+                let part_id = parent
+                    .spawn(mesh_builder.build_part(
+                        snake.tail_position(),
+                        snake.index(),
+                        snake.len() - 1,
+                    ))
+                    .id();
+                level_instance.mark_position_occupied(
+                    snake.tail_position(),
+                    LevelGridEntity::new(part_id, EntityType::Snake),
+                );
+            });
+        } else if keyboard.just_pressed(KeyCode::Minus) {
+            if snake.len() <= 2 {
+                continue;
+            }
+
+            level_instance.set_empty(snake.tail_position());
+            despawn_snake_part.send(DespawnSnakePartEvent(SnakePart {
+                snake_index: snake.index(),
+                part_index: snake.len() - 1,
+            }));
+
+            snake.shrink();
+        }
     }
 }
 
@@ -395,7 +496,7 @@ fn delete_selected_entity_system(
             continue;
         }
 
-        level_instance.set_empty(grid_entity.0);
+        level_instance.set_empty(grid_entity.position);
         commands.entity(entity).despawn();
     }
 }
@@ -412,9 +513,22 @@ fn create_new_level(
         }
     }
 
-    let new_tempale = LevelTemplate { walls, ..default() };
+    let new_tempale = LevelTemplate {
+        entities: walls
+            .into_iter()
+            .map(|position| EntityTemplate {
+                entity_type: EntityType::Wall,
+                model: Model::Default(EntityType::Wall.into()),
+                grid_position: position,
+            })
+            .collect(),
+        ..default()
+    };
 
-    commands.insert_resource(CurrentLevelAssetPath("levels/new.lvl".to_owned()));
+    commands.insert_resource(CurrentLevelMetadata {
+        id: None,
+        asset_path: "levels/new.lvl".to_owned(),
+    });
     commands.insert_resource(LoadedLevel(levels.add(new_tempale)));
     commands.insert_resource(LevelInstance::new());
     level_loaded_event.send(LevelLoadedEvent);
@@ -446,14 +560,9 @@ fn create_new_level_system(
 #[allow(clippy::too_many_arguments)]
 fn save_level_system(
     keyboard: Res<Input<KeyCode>>,
-    current_level_asset_path: Res<CurrentLevelAssetPath>,
+    level_meta: Res<CurrentLevelMetadata>,
     snake_query: Query<&Snake>,
-    walls_query: Query<&GridEntity, With<Wall>>,
-    foods_query: Query<&GridEntity, With<Food>>,
-    spikes_query: Query<&GridEntity, With<Spike>>,
-    boxes_query: Query<&GridEntity, With<Box>>,
-    triggers_query: Query<&GridEntity, With<Trigger>>,
-    goal_query: Query<&GridEntity, With<Goal>>,
+    entities: Query<&GridEntity>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
         return;
@@ -464,16 +573,18 @@ fn save_level_system(
             .iter()
             .map(|snake| snake.parts().clone().into())
             .collect(),
-        foods: foods_query.into_iter().map(|entity| entity.0).collect(),
-        spikes: spikes_query.into_iter().map(|entity| entity.0).collect(),
-        walls: walls_query.into_iter().map(|entity| entity.0).collect(),
-        boxes: boxes_query.into_iter().map(|entity| entity.0).collect(),
-        triggers: triggers_query.into_iter().map(|entity| entity.0).collect(),
-        goal: goal_query.get_single().map(|entity| entity.0).ok(),
+        entities: entities
+            .into_iter()
+            .map(|entity| EntityTemplate {
+                entity_type: entity.entity_type,
+                model: Model::Default(entity.entity_type.into()),
+                grid_position: entity.position,
+            })
+            .collect(),
     };
 
     let ron_string = ron::ser::to_string_pretty(&template, PrettyConfig::default()).unwrap();
-    let level_asset_path = current_level_asset_path.0.clone();
+    let level_asset_path = level_meta.asset_path.clone();
 
     #[cfg(not(target_arch = "wasm32"))]
     IoTaskPool::get()

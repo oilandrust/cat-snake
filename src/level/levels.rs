@@ -5,4 +5,3 @@ pub const LEVELS: [&str; 5] = [
     "level4.lvl",
     "level5.lvl",
 ];
-pub const TEST_LEVELS: [&str; 1] = ["level1.lvl"];

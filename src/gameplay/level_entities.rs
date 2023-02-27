@@ -17,7 +17,19 @@ use super::{
 pub struct LevelEntity;
 
 #[derive(Component, Clone, Copy)]
-pub struct GridEntity(pub IVec3);
+pub struct GridEntity {
+    pub position: IVec3,
+    pub entity_type: EntityType,
+}
+
+impl GridEntity {
+    pub fn new(position: IVec3, entity_type: EntityType) -> Self {
+        Self {
+            position,
+            entity_type,
+        }
+    }
+}
 
 #[derive(Component, Clone, Copy)]
 pub struct Wall;
@@ -49,15 +61,15 @@ pub trait Movable {
 
 impl Movable for GridEntity {
     fn positions(&self) -> &[IVec3] {
-        slice::from_ref(&self.0)
+        slice::from_ref(&self.position)
     }
 
     fn translate(&mut self, offset: IVec3) {
-        self.0 += offset;
+        self.position += offset;
     }
 
     fn set_positions(&mut self, positions: &[IVec3]) {
-        self.0 = positions[0];
+        self.position = positions[0];
     }
 
     fn entity_type(&self) -> EntityType {
@@ -105,7 +117,7 @@ pub fn spawn_spike(
     let entity = commands
         .spawn((
             mesh_builder.build_spike_mesh(*position),
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Spike),
             Spike,
             LevelEntity,
             Name::new("Spike"),
@@ -140,7 +152,7 @@ pub fn spawn_wall(
                 ..default()
             },
             LevelEntity,
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Wall),
             Wall,
             Name::new("Wall"),
         ))
@@ -161,7 +173,7 @@ pub fn spawn_food(
     let entity = commands
         .spawn((
             mesh_builder.build_food_mesh(*position),
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Food),
             Food,
             LevelEntity,
             Name::new("Food"),
@@ -183,7 +195,7 @@ pub fn spawn_box(
     let entity = commands
         .spawn((
             mesh_builder.build_box_mesh(*position),
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Box),
             Box,
             LevelEntity,
         ))
@@ -208,7 +220,7 @@ pub fn spawn_goal(
                 transform: Transform::from_translation(position.as_vec3()),
                 ..default()
             },
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Goal),
             Goal,
             LevelEntity,
             Name::new("Goal"),
@@ -230,7 +242,7 @@ pub fn spawn_trigger(
     let entity = commands
         .spawn((
             mesh_builder.build_trigger_mesh(*position),
-            GridEntity(*position),
+            GridEntity::new(*position, EntityType::Trigger),
             Trigger,
             LevelEntity,
             PickableBundle::default(),

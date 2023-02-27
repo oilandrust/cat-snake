@@ -3,9 +3,7 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    gameplay::level_plugin::{
-        load_level_system, CurrentLevelId, StartLevelEventWithLevelAssetPath,
-    },
+    gameplay::level_plugin::{load_level_system, StartLevelEventWithLevelAssetPath},
     gameplay::{level_plugin::LevelStages, movement_plugin::MoveCommandEvent},
 };
 
@@ -83,7 +81,7 @@ fn start_test_case(
         return;
     };
 
-    commands.insert_resource(CurrentLevelId(event.0));
+    //commands.insert_resource(CurrentLevelId(event.0));
 
     let new_test_case = &test_cases.cases[event.0];
     commands.insert_resource(new_test_case.clone());

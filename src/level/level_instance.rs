@@ -1,12 +1,13 @@
 use std::collections::VecDeque;
 
 use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb, utils::HashMap};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     gameplay::{level_entities::Movable, snake_plugin::Snake, undo::LevelEntityUpdateEvent},
     utils::ray_intersects_aabb,
 };
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Deserialize, Serialize)]
 pub enum EntityType {
     Food,
     Spike,
@@ -68,6 +69,14 @@ impl LevelInstance {
 
     pub fn is_empty_or_spike(&self, position: IVec3) -> bool {
         !self.occupied_cells.contains_key(&position) || self.is_spike(position)
+    }
+
+    pub fn is_goal(&self, position: IVec3) -> bool {
+        let cell = self.occupied_cells.get(&position);
+        match cell {
+            None => false,
+            Some(entity) => entity.entity_type == EntityType::Goal,
+        }
     }
 
     pub fn set_empty(&mut self, position: IVec3) -> Option<LevelGridEntity> {
@@ -163,6 +172,7 @@ impl LevelInstance {
             let old_value = self.set_empty(*position).unwrap();
             updates.push_front(LevelEntityUpdateEvent::ClearPosition(*position, old_value));
         }
+
         for position in positions {
             let new_position = *position + offset;
             self.mark_position_occupied(new_position, entity);
@@ -250,6 +260,7 @@ impl LevelInstance {
 
         let mut current_position = position + IVec3::NEG_Y;
         while self.is_empty_or_spike(current_position)
+            || self.is_goal(current_position)
             || self.is_entity(current_position, snake_entity)
         {
             current_position += IVec3::NEG_Y;
@@ -386,5 +397,11 @@ impl LevelInstance {
             min.as_vec3() - 0.5 * Vec3::ONE,
             max.as_vec3() + 0.5 * Vec3::ONE,
         )
+    }
+}
+
+impl Default for LevelInstance {
+    fn default() -> Self {
+        Self::new()
     }
 }

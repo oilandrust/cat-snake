@@ -6,7 +6,7 @@ use iyes_loopless::{
 };
 
 use crate::{
-    level::level_instance::LevelInstance,
+    level::level_instance::{EntityType, LevelInstance},
     level::level_template::{LevelTemplateLoader, LoadedLevel},
     level::{
         level_template::{LevelTemplate, LoadingLevel},
@@ -27,16 +27,15 @@ use super::{
 };
 
 pub struct StartLevelEventWithIndex(pub usize);
-pub struct StartTestLevelEventWithIndex(pub usize);
 pub struct StartLevelEventWithLevelAssetPath(pub String);
 pub struct LevelLoadedEvent;
 pub struct ClearLevelEvent;
 
 #[derive(Resource)]
-pub struct CurrentLevelId(pub usize);
-
-#[derive(Resource)]
-pub struct CurrentLevelAssetPath(pub String);
+pub struct CurrentLevelMetadata {
+    pub id: Option<usize>,
+    pub asset_path: String,
+}
 
 pub struct LevelPlugin;
 
@@ -55,7 +54,6 @@ impl Plugin for LevelPlugin {
             .init_asset_loader::<LevelTemplateLoader>()
             .add_exit_system(GameState::Game, clear_level_runtime_resources_system)
             .add_event::<StartLevelEventWithIndex>()
-            .add_event::<StartTestLevelEventWithIndex>()
             .add_event::<StartLevelEventWithLevelAssetPath>()
             .add_event::<LevelLoadedEvent>()
             .add_event::<ClearLevelEvent>()
@@ -63,7 +61,6 @@ impl Plugin for LevelPlugin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .with_system(load_level_with_index_system)
-                    .with_system(load_test_level_with_index_system)
                     .with_system(load_level_system)
                     .into(),
             )
@@ -132,26 +129,10 @@ fn load_level_with_index_system(
 
     event_start_level.send(StartLevelEventWithLevelAssetPath(level_asset_path.clone()));
 
-    commands.insert_resource(CurrentLevelId(next_level_index));
-    commands.insert_resource(CurrentLevelAssetPath(level_asset_path));
-}
-
-fn load_test_level_with_index_system(
-    mut commands: Commands,
-    mut event_start_level_with_index: EventReader<StartTestLevelEventWithIndex>,
-    mut event_start_level: EventWriter<StartLevelEventWithLevelAssetPath>,
-) {
-    let Some(event) = event_start_level_with_index.iter().next() else {
-        return;
-    };
-
-    let next_level_index = event.0;
-    let level_asset_path = format!("test_levels/{}", TEST_LEVELS[next_level_index]);
-
-    event_start_level.send(StartLevelEventWithLevelAssetPath(level_asset_path.clone()));
-
-    commands.insert_resource(CurrentLevelId(next_level_index));
-    commands.insert_resource(CurrentLevelAssetPath(level_asset_path));
+    commands.insert_resource(CurrentLevelMetadata {
+        id: Some(next_level_index),
+        asset_path: level_asset_path,
+    });
 }
 
 pub fn load_level_system(
@@ -219,9 +200,9 @@ pub fn spawn_level_entities_system(
     let mut min = 1000 * IVec3::ONE;
     let mut max = 1000 * IVec3::NEG_ONE;
 
-    level_template.walls.iter().for_each(|position| {
-        min = min.min(*position);
-        max = max.max(*position);
+    level_template.entities.iter().for_each(|entity| {
+        min = min.min(entity.grid_position);
+        max = max.max(entity.grid_position);
     });
 
     let center = min.as_vec3() + 0.5 * (max - min).as_vec3();
@@ -265,64 +246,62 @@ pub fn spawn_level_entities_system(
         materials: materials.as_mut(),
     };
 
-    // Spawn the wall blocks
-    for position in &level_template.walls {
-        spawn_wall(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-            assets.as_ref(),
-        );
+    // Spawn the entities
+    for entity in &level_template.entities {
+        match entity.entity_type {
+            EntityType::Food => {
+                spawn_food(
+                    &mut mesh_builder,
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                );
+            }
+            EntityType::Spike => {
+                spawn_spike(
+                    &mut mesh_builder,
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                );
+            }
+            EntityType::Wall => {
+                spawn_wall(
+                    &mut mesh_builder,
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                    assets.as_ref(),
+                );
+            }
+            EntityType::Box => {
+                spawn_box(
+                    &mut mesh_builder,
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                );
+            }
+            EntityType::Trigger => {
+                spawn_trigger(
+                    &mut mesh_builder,
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                );
+            }
+            EntityType::Goal => {
+                spawn_goal(
+                    &mut commands,
+                    &entity.grid_position,
+                    &mut level_instance,
+                    &assets,
+                    &assets_gltf,
+                );
+            }
+            EntityType::Snake => {}
+        }
     }
-
-    // Spawn the food sprites.
-    for position in &level_template.foods {
-        spawn_food(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-        );
-    }
-
-    // Spawn the spikes sprites.
-    for position in &level_template.spikes {
-        spawn_spike(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-        );
-    }
-
-    for position in &level_template.boxes {
-        spawn_box(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-        );
-    }
-
-    for position in &level_template.triggers {
-        spawn_trigger(
-            &mut mesh_builder,
-            &mut commands,
-            position,
-            &mut level_instance,
-        );
-    }
-
-    if let Some(goal_position) = level_template.goal {
-        spawn_goal(
-            &mut commands,
-            &goal_position,
-            &mut level_instance,
-            &assets,
-            &assets_gltf,
-        );
-    };
 
     for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
         let entity = spawn_snake(
@@ -427,7 +406,7 @@ pub fn check_for_level_completion_system(
 
     let snake_at_exit = snakes_query
         .iter()
-        .find(|(_, snake)| goal.0 == snake.head_position());
+        .find(|(_, snake)| goal.position == snake.head_position());
     if snake_at_exit.is_none() {
         return;
     }
@@ -482,7 +461,7 @@ pub fn start_snake_exit_level_system(
 
 pub fn finish_snake_exit_level_system(
     mut commands: Commands,
-    level_id: Res<CurrentLevelId>,
+    level_meta: Res<CurrentLevelMetadata>,
     snake_reach_goal_event: EventReader<SnakeExitedLevelEvent>,
     mut event_start_level: EventWriter<StartLevelEventWithIndex>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
@@ -493,12 +472,14 @@ pub fn finish_snake_exit_level_system(
     }
 
     if snakes_query.is_empty() {
-        if level_id.0 == LEVELS.len() - 1 {
-            event_clear_level.send(ClearLevelEvent);
-            commands.insert_resource(NextState(GameState::MainMenu));
-        } else {
-            event_clear_level.send(ClearLevelEvent);
-            event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
+        if let Some(level_id) = level_meta.id {
+            if level_id == LEVELS.len() - 1 {
+                event_clear_level.send(ClearLevelEvent);
+                commands.insert_resource(NextState(GameState::MainMenu));
+            } else {
+                event_clear_level.send(ClearLevelEvent);
+                event_start_level.send(StartLevelEventWithIndex(level_id + 1));
+            }
         }
     }
 }

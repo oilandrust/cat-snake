@@ -9,16 +9,50 @@ use serde::{Deserialize, Serialize};
 
 use crate::gameplay::snake_plugin::SnakeTemplate;
 
-#[derive(Reflect, Resource, Deserialize, Serialize, TypeUuid, Debug, Default)]
+use super::level_instance::EntityType;
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum DefaultModel {
+    Food,
+    Spike,
+    Wall,
+    Box,
+    Trigger,
+    Goal,
+}
+
+impl From<EntityType> for DefaultModel {
+    fn from(value: EntityType) -> Self {
+        match value {
+            EntityType::Food => DefaultModel::Food,
+            EntityType::Spike => DefaultModel::Spike,
+            EntityType::Wall => DefaultModel::Wall,
+            EntityType::Box => DefaultModel::Box,
+            EntityType::Trigger => DefaultModel::Trigger,
+            EntityType::Snake => todo!(),
+            EntityType::Goal => DefaultModel::Goal,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum Model {
+    Default(DefaultModel),
+    Asset(String),
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct EntityTemplate {
+    pub entity_type: EntityType,
+    pub model: Model,
+    pub grid_position: IVec3,
+}
+
+#[derive(Resource, Deserialize, Serialize, TypeUuid, Debug, Default)]
 #[uuid = "39cadc56-aa9c-4543-8640-a018b74b5052"]
 pub struct LevelTemplate {
     pub snakes: Vec<SnakeTemplate>,
-    pub foods: Vec<IVec3>,
-    pub walls: Vec<IVec3>,
-    pub spikes: Vec<IVec3>,
-    pub boxes: Vec<IVec3>,
-    pub triggers: Vec<IVec3>,
-    pub goal: Option<IVec3>,
+    pub entities: Vec<EntityTemplate>,
 }
 
 #[derive(Resource)]

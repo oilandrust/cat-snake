@@ -19,7 +19,7 @@ pub struct Args {
     pub level: Option<usize>,
 
     #[arg(short, long)]
-    pub test_level: Option<usize>,
+    pub test_level: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,

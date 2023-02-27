@@ -339,7 +339,7 @@ pub fn snake_movement_control_system(
 
             // Check that we have enough parts to go up.
             let is_goal = if let Ok(goal) = goal_query.get_single() {
-                goal.0 == new_position
+                goal.position == new_position
             } else {
                 false
             };
@@ -355,6 +355,10 @@ pub fn snake_movement_control_system(
                     grid_distance: 0,
                 });
                 break 'choose_direction None;
+            }
+
+            if level_instance.is_entity(new_position, snake_entity) {
+                continue;
             }
 
             // Find if there is a movable entity in the way.
@@ -375,7 +379,9 @@ pub fn snake_movement_control_system(
     };
 
     // Any food?
-    let food = foods_query.iter().find(|food| food.0 == new_position);
+    let food = foods_query
+        .iter()
+        .find(|food| food.position == new_position);
 
     // Finaly move the snake forward and commit the state.
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
@@ -435,7 +441,7 @@ pub fn grow_snake_on_move_system(
     };
 
     for (food_entity, food) in &foods_query {
-        if food.0 != snake.head_position() {
+        if food.position != snake.head_position() {
             continue;
         }
 
@@ -476,7 +482,7 @@ pub fn activate_trigger_on_move_system(
     }
 
     for (trigger_entity, mut transform, trigger, active) in &mut triggers {
-        let has_load = level_instance.is_movable(trigger.0).is_some();
+        let has_load = level_instance.is_movable(trigger.position).is_some();
 
         if has_load && active.is_none() {
             commands.entity(trigger_entity).insert(Active);
@@ -634,16 +640,16 @@ pub fn snake_exit_level_anim_system(
             };
 
             if modifier.is_some() {
-                if (snake.parts()[part.part_index].0 - goal.0)
+                if (snake.parts()[part.part_index].0 - goal.position)
                     .abs()
                     .max_element()
                     > 1
                 {
                     event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
                 }
-            } else if snake.parts()[part.part_index].0 == goal.0 {
+            } else if snake.parts()[part.part_index].0 == goal.position {
                 commands.entity(entity).insert(PartClipper {
-                    clip_position: goal.0,
+                    clip_position: goal.position,
                 });
             }
         }

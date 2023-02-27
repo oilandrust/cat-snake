@@ -11,6 +11,10 @@ path = "src/game.rs"
 name = "cat-snake"
 path = "src/desktop_main.rs"
 
+[[bin]]
+name = "convert_level"
+path = "src/convert_levels.rs"
+
 [dependencies.bevy]
 version = "0.9.1"
 default-features = true
