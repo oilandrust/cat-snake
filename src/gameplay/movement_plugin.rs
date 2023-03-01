@@ -11,8 +11,9 @@ use crate::{
     gameplay::game_constants_plugin::*,
     gameplay::snake_plugin::{respawn_snake_on_fall_system, Active, SelectedSnake, Snake},
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
-    GameAssets, GameState,
+    level::level_instance::{LevelGridEntity, LevelInstance},
+    library::GameAssets,
+    GameState,
 };
 
 use super::{
@@ -135,7 +136,7 @@ impl Plugin for MovementPlugin {
                     .label(MovementStages::SnakeFall)
                     .after(MovementStages::SnakeGrow)
                     .with_system(gravity_system::<Snake, (With<Active>, Without<LevelExitAnim>)>)
-                    .with_system(gravity_system::<GridEntity, With<Box>>)
+                    .with_system(gravity_system::<GridEntity, With<BoxComponent>>)
                     .into(),
             )
             .add_system_set(
@@ -312,9 +313,17 @@ pub fn snake_movement_control_system(
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
-    mut boxes_query: Query<(Entity, &mut GridEntity), (With<Box>, Without<Food>)>,
-    foods_query: Query<&GridEntity, (With<Food>, Without<Box>)>,
-    goal_query: Query<&GridEntity, (With<Goal>, With<Active>, Without<Box>, Without<Food>)>,
+    mut boxes_query: Query<(Entity, &mut GridEntity), (With<BoxComponent>, Without<FoodComponent>)>,
+    foods_query: Query<&GridEntity, (With<FoodComponent>, Without<BoxComponent>)>,
+    goal_query: Query<
+        &GridEntity,
+        (
+            With<GoalComponent>,
+            With<Active>,
+            Without<BoxComponent>,
+            Without<FoodComponent>,
+        ),
+    >,
 ) {
     let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
         return;
@@ -430,7 +439,7 @@ pub fn grow_snake_on_move_system(
     mut materials: ResMut<bevy::asset::Assets<StandardMaterial>>,
     mut commands: Commands,
     snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
-    foods_query: Query<(Entity, &GridEntity), With<Food>>,
+    foods_query: Query<(Entity, &GridEntity), With<FoodComponent>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
@@ -475,7 +484,10 @@ pub fn activate_trigger_on_move_system(
     snake_moved_event: EventReader<SnakeMovedEvent>,
     undo_event: EventReader<UndoEvent>,
     mut commands: Commands,
-    mut triggers: Query<(Entity, &mut Transform, &GridEntity, Option<&Active>), With<Trigger>>,
+    mut triggers: Query<
+        (Entity, &mut Transform, &GridEntity, Option<&Active>),
+        With<TriggerComponent>,
+    >,
 ) {
     if snake_moved_event.is_empty() && undo_event.is_empty() {
         return;
@@ -627,7 +639,7 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
-    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
+    goal_query: Query<&GridEntity, (With<GoalComponent>, With<Active>)>,
 ) {
     let Ok(goal) = goal_query.get_single() else {
         return;

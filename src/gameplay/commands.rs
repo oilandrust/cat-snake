@@ -2,11 +2,11 @@ use crate::{
     gameplay::movement_plugin::GravityFall,
     gameplay::snake_plugin::Snake,
     gameplay::undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},
-    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
+    level::level_instance::{LevelGridEntity, LevelInstance},
 };
 use bevy::prelude::*;
 
-use super::level_entities::{GridEntity, Movable};
+use super::level_entities::{EntityType, GridEntity, Movable};
 
 /// Provides commands that implement the undoable game mechanics.
 /// Commands manage the state of the game data such as snakes, food, etc..

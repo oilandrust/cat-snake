@@ -98,7 +98,7 @@ impl SnakeHistory {
     pub fn undo_last(
         &mut self,
         snakes: &mut Query<(Entity, &mut Snake)>,
-        box_query: &mut Query<(Entity, &mut GridEntity), With<Box>>,
+        box_query: &mut Query<(Entity, &mut GridEntity), With<BoxComponent>>,
         level: &mut LevelInstance,
         commands: &mut Commands,
         part_builder: &mut MaterialMeshBuilder,
@@ -141,7 +141,7 @@ impl SnakeHistory {
                     snake.shrink();
                 }
                 MoveHistoryEvent::Eat(position) => {
-                    spawn_food(part_builder, commands, &position, level);
+                    spawn_food(part_builder, commands, &position);
                 }
                 MoveHistoryEvent::ExitLevel(snake_entity) => {
                     let snake = movable_registry.get_mut_snake(&top.level_entity);
@@ -180,7 +180,7 @@ pub fn undo_event_system(
     mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
     mut commands: Commands,
     mut snake_query: Query<(Entity, &mut Snake)>,
-    mut box_query: Query<(Entity, &mut GridEntity), With<Box>>,
+    mut box_query: Query<(Entity, &mut GridEntity), With<BoxComponent>>,
 ) {
     if trigger_undo_event.iter().next().is_none() {
         return;

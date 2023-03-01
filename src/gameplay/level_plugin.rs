@@ -6,14 +6,15 @@ use iyes_loopless::{
 };
 
 use crate::{
-    level::level_instance::{EntityType, LevelInstance},
+    level::level_instance::{LevelGridEntity, LevelInstance},
     level::level_template::{LevelTemplateLoader, LoadedLevel},
     level::{
         level_template::{LevelTemplate, LoadingLevel},
         levels::*,
     },
+    library::GameAssets,
     tools::cameras::camera_3d_free::FlycamControls,
-    Assets, GameAssets, GameState,
+    Assets, GameState,
 };
 
 use super::{
@@ -247,60 +248,66 @@ pub fn spawn_level_entities_system(
     };
 
     // Spawn the entities
-    for entity in &level_template.entities {
-        match entity.entity_type {
-            EntityType::Food => {
-                spawn_food(
-                    &mut mesh_builder,
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                );
-            }
-            EntityType::Spike => {
-                spawn_spike(
-                    &mut mesh_builder,
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                );
-            }
+    for entity_template in &level_template.entities {
+        let entity = match entity_template.entity_type {
+            EntityType::Food => spawn_food(
+                &mut mesh_builder,
+                &mut commands,
+                &entity_template.grid_position,
+            ),
+            EntityType::Spike => spawn_spike(
+                &mut mesh_builder,
+                &mut commands,
+                &entity_template.grid_position,
+            ),
             EntityType::Wall => {
-                spawn_wall(
-                    &mut mesh_builder,
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                    assets.as_ref(),
-                );
+                let ground_material = mesh_builder.materials.add(StandardMaterial {
+                    base_color: Color::rgb(0.8, 0.7, 0.6),
+                    base_color_texture: Some(assets.outline_texture.clone()),
+                    ..default()
+                });
+
+                let model = PbrBundle {
+                    mesh: assets.cube_mesh.clone(),
+                    material: ground_material,
+                    transform: Transform::from_translation(entity_template.grid_position.as_vec3()),
+                    ..default()
+                };
+
+                let entity = commands
+                    .spawn((
+                        model,
+                        LevelEntity,
+                        GridEntity::new(entity_template.grid_position, EntityType::Wall),
+                        Name::new("Wall"),
+                    ))
+                    .id();
+
+                entity
             }
-            EntityType::Box => {
-                spawn_box(
-                    &mut mesh_builder,
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                );
-            }
-            EntityType::Trigger => {
-                spawn_trigger(
-                    &mut mesh_builder,
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                );
-            }
-            EntityType::Goal => {
-                spawn_goal(
-                    &mut commands,
-                    &entity.grid_position,
-                    &mut level_instance,
-                    &assets,
-                    &assets_gltf,
-                );
-            }
-            EntityType::Snake => {}
-        }
+            EntityType::Box => spawn_box(
+                &mut mesh_builder,
+                &mut commands,
+                &entity_template.grid_position,
+            ),
+            EntityType::Trigger => spawn_trigger(
+                &mut mesh_builder,
+                &mut commands,
+                &entity_template.grid_position,
+            ),
+            EntityType::Goal => spawn_goal(
+                &mut commands,
+                &entity_template.grid_position,
+                &assets,
+                &assets_gltf,
+            ),
+            EntityType::Snake => todo!(),
+        };
+
+        level_instance.mark_position_occupied(
+            entity_template.grid_position,
+            LevelGridEntity::new(entity, entity_template.entity_type),
+        );
     }
 
     for (snake_index, snake_template) in level_template.snakes.iter().enumerate() {
@@ -337,8 +344,8 @@ pub fn clear_level_system(
 
 fn _activate_goal_when_all_food_eaten_system(
     mut commands: Commands,
-    food_query: Query<&Food>,
-    goal_query: Query<(Entity, Option<&Active>), With<Goal>>,
+    food_query: Query<&FoodComponent>,
+    goal_query: Query<(Entity, Option<&Active>), With<GoalComponent>>,
 ) {
     let Ok((goal_entity, active)) = goal_query.get_single() else {
         return;
@@ -359,10 +366,10 @@ struct LightCone;
 #[allow(clippy::type_complexity)]
 fn activate_goal_when_trigger_pressed_system(
     mut commands: Commands,
-    triggers_query: Query<&Trigger, Without<Active>>,
+    triggers_query: Query<&TriggerComponent, Without<Active>>,
     assets: Res<GameAssets>,
     gltfs: Res<Assets<Gltf>>,
-    mut goal_query: Query<(Entity, Option<&Active>, &mut Handle<Scene>), With<Goal>>,
+    mut goal_query: Query<(Entity, Option<&Active>, &mut Handle<Scene>), With<GoalComponent>>,
     light_cone: Query<Entity, With<LightCone>>,
 ) {
     let Ok((goal_entity, active, mut scene)) = goal_query.get_single_mut() else {
@@ -398,7 +405,7 @@ fn activate_goal_when_trigger_pressed_system(
 pub fn check_for_level_completion_system(
     mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     snakes_query: Query<(Entity, &Snake), (With<Active>, Without<LevelExitAnim>)>,
-    goal_query: Query<&GridEntity, (With<Goal>, With<Active>)>,
+    goal_query: Query<&GridEntity, (With<GoalComponent>, With<Active>)>,
 ) {
     let Ok(goal) = goal_query.get_single() else {
         return;

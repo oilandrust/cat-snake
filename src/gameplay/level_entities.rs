@@ -1,11 +1,12 @@
 use core::slice;
 
 use bevy::{gltf::Gltf, prelude::*};
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
+    level::level_instance::{LevelGridEntity, LevelInstance},
+    library::GameAssets,
     tools::picking::PickableBundle,
-    GameAssets,
 };
 
 use super::{
@@ -15,6 +16,17 @@ use super::{
 
 #[derive(Component)]
 pub struct LevelEntity;
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Reflect, Deserialize, Serialize)]
+pub enum EntityType {
+    Food,
+    Spike,
+    Wall,
+    Box,
+    Trigger,
+    Snake,
+    Goal,
+}
 
 #[derive(Component, Clone, Copy)]
 pub struct GridEntity {
@@ -31,23 +43,24 @@ impl GridEntity {
     }
 }
 
-#[derive(Component, Clone, Copy)]
-pub struct Wall;
+trait EntityBuilder {
+    fn build_entity<B: Bundle>() -> B;
+}
 
 #[derive(Component, Clone, Copy)]
-pub struct Food;
+pub struct FoodComponent;
 
 #[derive(Component, Clone, Copy)]
-pub struct Spike;
+pub struct SpikeComponent;
 
 #[derive(Component, Clone, Copy)]
-pub struct Goal;
+pub struct GoalComponent;
 
 #[derive(Component, Clone, Copy)]
-pub struct Box;
+pub struct BoxComponent;
 
 #[derive(Component, Clone, Copy)]
-pub struct Trigger;
+pub struct TriggerComponent;
 
 pub trait Movable {
     fn positions(&self) -> &[IVec3];
@@ -73,7 +86,7 @@ impl Movable for GridEntity {
     }
 
     fn entity_type(&self) -> EntityType {
-        EntityType::Box
+        self.entity_type
     }
 }
 
@@ -112,20 +125,16 @@ pub fn spawn_spike(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
 ) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_spike_mesh(*position),
             GridEntity::new(*position, EntityType::Spike),
-            Spike,
+            SpikeComponent,
             LevelEntity,
             Name::new("Spike"),
         ))
         .id();
-
-    level_instance
-        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Spike));
 
     entity
 }
@@ -134,7 +143,6 @@ pub fn spawn_wall(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
     assets: &GameAssets,
 ) -> Entity {
     let ground_material = mesh_builder.materials.add(StandardMaterial {
@@ -153,13 +161,9 @@ pub fn spawn_wall(
             },
             LevelEntity,
             GridEntity::new(*position, EntityType::Wall),
-            Wall,
             Name::new("Wall"),
         ))
         .id();
-
-    level_instance
-        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Wall));
 
     entity
 }
@@ -168,20 +172,16 @@ pub fn spawn_food(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
 ) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_food_mesh(*position),
             GridEntity::new(*position, EntityType::Food),
-            Food,
+            FoodComponent,
             LevelEntity,
             Name::new("Food"),
         ))
         .id();
-
-    level_instance
-        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Food));
 
     entity
 }
@@ -190,18 +190,15 @@ pub fn spawn_box(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
 ) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_box_mesh(*position),
             GridEntity::new(*position, EntityType::Box),
-            Box,
+            BoxComponent,
             LevelEntity,
         ))
         .id();
-
-    level_instance.mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Box));
 
     entity
 }
@@ -209,7 +206,6 @@ pub fn spawn_box(
 pub fn spawn_goal(
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
     assets: &GameAssets,
     assets_gltf: &Assets<Gltf>,
 ) -> Entity {
@@ -221,14 +217,11 @@ pub fn spawn_goal(
                 ..default()
             },
             GridEntity::new(*position, EntityType::Goal),
-            Goal,
+            GoalComponent,
             LevelEntity,
             Name::new("Goal"),
         ))
         .id();
-
-    level_instance
-        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Goal));
 
     entity
 }
@@ -237,21 +230,17 @@ pub fn spawn_trigger(
     mesh_builder: &mut MaterialMeshBuilder,
     commands: &mut Commands,
     position: &IVec3,
-    level_instance: &mut LevelInstance,
 ) -> Entity {
     let entity = commands
         .spawn((
             mesh_builder.build_trigger_mesh(*position),
             GridEntity::new(*position, EntityType::Trigger),
-            Trigger,
+            TriggerComponent,
             LevelEntity,
             PickableBundle::default(),
             Name::new("Trigger"),
         ))
         .id();
-
-    level_instance
-        .mark_position_occupied(*position, LevelGridEntity::new(entity, EntityType::Trigger));
 
     entity
 }

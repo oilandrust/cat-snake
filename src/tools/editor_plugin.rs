@@ -1,7 +1,10 @@
 use std::{fs::File, io::Write};
 
 use bevy::{gltf::Gltf, prelude::*, tasks::IoTaskPool};
+use bevy_inspector_egui::{prelude::ReflectInspectorOptions, InspectorOptions};
 use bevy_prototype_debug_lines::DebugLinesMesh;
+use bevy_reflect::Reflect;
+use egui::Align2;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -22,15 +25,16 @@ use crate::{
         },
     },
     level::{
-        level_instance::{EntityType, LevelGridEntity, LevelInstance},
+        level_instance::{LevelGridEntity, LevelInstance},
         level_template::{EntityTemplate, LevelTemplate, LoadedLevel, LoadingLevel, Model},
     },
+    library::GameAssets,
     tools::{
         cameras::{camera_3d_free, EditorCamera},
         picking::PickingCameraBundle,
     },
     utils::ray_from_screen_space,
-    GameAssets, GameState,
+    GameState,
 };
 
 use super::{
@@ -40,7 +44,8 @@ use super::{
 
 pub struct EditorPlugin;
 
-#[derive(Resource)]
+#[derive(Resource, InspectorOptions, Reflect)]
+#[reflect(InspectorOptions)]
 struct EditorState {
     insert_entity_type: EntityType,
 }
@@ -89,6 +94,7 @@ impl Plugin for EditorPlugin {
                     .with_system(move_selected_snake_system)
                     .with_system(resize_selected_snake_system)
                     .with_system(despawn_snake_part_system)
+                    .with_system(ui_editor)
                     .into(),
             )
             .add_system_set(
@@ -219,37 +225,13 @@ fn add_entity_on_click_system(
     };
 
     let id = match editor_state.insert_entity_type {
-        EntityType::Food => spawn_food(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-        ),
-        EntityType::Spike => spawn_spike(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-        ),
-        EntityType::Wall => spawn_wall(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-            assets.as_ref(),
-        ),
-        EntityType::Box => spawn_box(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-        ),
-        EntityType::Trigger => spawn_trigger(
-            &mut mesh_builder,
-            &mut commands,
-            &position,
-            &mut level_instance,
-        ),
+        EntityType::Food => spawn_food(&mut mesh_builder, &mut commands, &position),
+        EntityType::Spike => spawn_spike(&mut mesh_builder, &mut commands, &position),
+        EntityType::Wall => {
+            spawn_wall(&mut mesh_builder, &mut commands, &position, assets.as_ref())
+        }
+        EntityType::Box => spawn_box(&mut mesh_builder, &mut commands, &position),
+        EntityType::Trigger => spawn_trigger(&mut mesh_builder, &mut commands, &position),
         EntityType::Snake => spawn_snake(
             &mut mesh_builder,
             &mut commands,
@@ -257,14 +239,13 @@ fn add_entity_on_click_system(
             &vec![(position, IVec3::X), (position - IVec3::X, IVec3::X)],
             snakes.iter().len() as i32,
         ),
-        EntityType::Goal => spawn_goal(
-            &mut commands,
-            &position,
-            &mut level_instance,
-            &assets,
-            &gltfs,
-        ),
+        EntityType::Goal => spawn_goal(&mut commands, &position, &assets, &gltfs),
     };
+
+    level_instance.mark_position_occupied(
+        position,
+        LevelGridEntity::new(id, editor_state.insert_entity_type),
+    );
 
     commands.entity(id).insert(PickableBundle::default());
 }
@@ -595,3 +576,17 @@ fn save_level_system(
         })
         .detach();
 }
+
+fn ui_editor(world: &mut World) {
+    let egui_context = world
+        .resource_mut::<bevy_egui::EguiContext>()
+        .ctx_mut()
+        .clone();
+
+//     egui::Area::new("my_area")
+//         .pivot(Align2::RIGHT_TOP)
+//         .fixed_pos(egui::pos2(1080.0, 0.0))
+//         .show(&egui_context, |ui| {
+//             bevy_inspector_egui::bevy_inspector::ui_for_resource::<EditorState>(world, ui);
+//         });
+// }

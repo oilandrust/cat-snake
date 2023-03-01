@@ -1,22 +1,15 @@
 use std::collections::VecDeque;
 
 use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb, utils::HashMap};
-use serde::{Deserialize, Serialize};
 
 use crate::{
-    gameplay::{level_entities::Movable, snake_plugin::Snake, undo::LevelEntityUpdateEvent},
+    gameplay::{
+        level_entities::{EntityType, Movable},
+        snake_plugin::Snake,
+        undo::LevelEntityUpdateEvent,
+    },
     utils::ray_intersects_aabb,
 };
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Deserialize, Serialize)]
-pub enum EntityType {
-    Food,
-    Spike,
-    Wall,
-    Box,
-    Trigger,
-    Snake,
-    Goal,
-}
 
 impl EntityType {
     pub fn is_movable(&self) -> bool {

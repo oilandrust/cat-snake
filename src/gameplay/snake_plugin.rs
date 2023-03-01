@@ -7,12 +7,12 @@ use crate::{
     gameplay::game_constants_plugin::SNAKE_COLORS,
     gameplay::movement_plugin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
-    level::level_instance::{EntityType, LevelGridEntity, LevelInstance},
+    level::level_instance::{LevelGridEntity, LevelInstance},
     utils::{ray_from_screen_space, ray_intersects_aabb},
     GameState,
 };
 
-use super::level_entities::{GridEntity, Movable};
+use super::level_entities::{EntityType, GridEntity, Movable};
 
 pub struct SnakePlugin;
 

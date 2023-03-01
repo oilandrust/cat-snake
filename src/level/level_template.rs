@@ -7,9 +7,7 @@ use bevy::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::gameplay::snake_plugin::SnakeTemplate;
-
-use super::level_instance::EntityType;
+use crate::gameplay::{level_entities::EntityType, snake_plugin::SnakeTemplate};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum DefaultModel {
