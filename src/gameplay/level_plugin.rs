@@ -7,12 +7,12 @@ use iyes_loopless::{
 
 use crate::{
     level::level_instance::{LevelGridEntity, LevelInstance},
-    level::level_template::{LevelTemplateLoader, LoadedLevel},
+    level::level_template::{LevelTemplateLoader, LoadedLevel, Model, ModelId},
     level::{
         level_template::{LevelTemplate, LoadingLevel},
         levels::*,
     },
-    library::GameAssets,
+    library::{AssetLibrary, GameAssets},
     tools::cameras::camera_3d_free::FlycamControls,
     Assets, GameState,
 };
@@ -185,6 +185,7 @@ pub fn spawn_level_entities_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     assets_gltf: Res<Assets<Gltf>>,
     assets: Res<GameAssets>,
+    library: Res<AssetLibrary>,
     loaded_level: Res<LoadedLevel>,
     level_templates: ResMut<Assets<LevelTemplate>>,
     mut camera: Query<(&mut Transform, Option<&mut FlycamControls>), With<Camera>>,
@@ -249,6 +250,9 @@ pub fn spawn_level_entities_system(
 
     // Spawn the entities
     for entity_template in &level_template.entities {
+        let transform = Transform::from_translation(entity_template.grid_position.as_vec3())
+            .with_rotation(entity_template.rotation);
+
         let entity = match entity_template.entity_type {
             EntityType::Food => spawn_food(
                 &mut mesh_builder,
@@ -261,29 +265,39 @@ pub fn spawn_level_entities_system(
                 &entity_template.grid_position,
             ),
             EntityType::Wall => {
-                let ground_material = mesh_builder.materials.add(StandardMaterial {
-                    base_color: Color::rgb(0.8, 0.7, 0.6),
-                    base_color_texture: Some(assets.outline_texture.clone()),
-                    ..default()
-                });
+                let mut entity_command = commands.spawn((
+                    LevelEntity,
+                    GridEntity::new(entity_template.grid_position, EntityType::Wall),
+                    Name::new("Wall"),
+                ));
 
-                let model = PbrBundle {
-                    mesh: assets.cube_mesh.clone(),
-                    material: ground_material,
-                    transform: Transform::from_translation(entity_template.grid_position.as_vec3()),
-                    ..default()
-                };
+                match &entity_template.model {
+                    Model::Default(_) => {
+                        entity_command.insert(PbrBundle {
+                            mesh: assets.cube_mesh.clone(),
+                            material: assets.default_cube_material.clone(),
+                            transform,
+                            ..default()
+                        });
+                    }
+                    Model::Asset(path) => {
+                        let model = library.models.get(path).unwrap();
+                        let scene = assets_gltf.get(model).unwrap().scenes[0].clone();
 
-                let entity = commands
-                    .spawn((
-                        model,
-                        LevelEntity,
-                        GridEntity::new(entity_template.grid_position, EntityType::Wall),
-                        Name::new("Wall"),
-                    ))
-                    .id();
+                        entity_command.insert((
+                            SceneBundle {
+                                scene,
+                                transform,
+                                ..default()
+                            },
+                            ModelId {
+                                source_asset: model.clone(),
+                            },
+                        ));
+                    }
+                }
 
-                entity
+                entity_command.id()
             }
             EntityType::Box => spawn_box(
                 &mut mesh_builder,

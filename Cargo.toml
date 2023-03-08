@@ -11,10 +11,6 @@ path = "src/game.rs"
 name = "cat-snake"
 path = "src/desktop_main.rs"
 
-[[bin]]
-name = "convert_level"
-path = "src/convert_levels.rs"
-
 [dependencies.bevy]
 version = "0.9.1"
 default-features = true
@@ -46,7 +42,7 @@ rand = "0.8.5"
 ron = "0.8"
 serde = "1.0.152"
 bevy_mod_raycast = "0.7.0"
-bevy_asset_loader = "0.14.1"
+bevy_asset_loader = { git = "https://github.com/NiklasEi/bevy_asset_loader.git" }
 bevy_reflect = "0.9.1"
 
 # Wasm Dependenccies

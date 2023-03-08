@@ -1,0 +1,7 @@
+Snapshots:
+
+* 1. Day0 - Snake movement
+* 2. Day 15 - Snake bird mecahnics
+* 3. 1 Month - Leve ripper, menu, web build
+* 4. 1.5 Months - "Polished clone" - water effect, vector graphics, some animations.
+* 5. 2 Months - Ported the game to 3D, designed original levels, build level design tools, importing 3D assets

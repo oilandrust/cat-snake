@@ -1,5 +1,6 @@
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadedAsset},
+    gltf::Gltf,
     prelude::*,
     reflect::TypeUuid,
     utils::BoxedFuture,
@@ -33,6 +34,11 @@ impl From<EntityType> for DefaultModel {
     }
 }
 
+#[derive(Component)]
+pub struct ModelId {
+    pub source_asset: Handle<Gltf>,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub enum Model {
     Default(DefaultModel),
@@ -44,6 +50,19 @@ pub struct EntityTemplate {
     pub entity_type: EntityType,
     pub model: Model,
     pub grid_position: IVec3,
+    #[serde(default)]
+    pub rotation: Quat,
+}
+
+impl Default for EntityTemplate {
+    fn default() -> Self {
+        Self {
+            entity_type: EntityType::Wall,
+            model: Model::Default(DefaultModel::Wall),
+            grid_position: Default::default(),
+            rotation: Default::default(),
+        }
+    }
 }
 
 #[derive(Resource, Deserialize, Serialize, TypeUuid, Debug, Default)]

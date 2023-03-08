@@ -1,10 +1,9 @@
-use std::{fs::File, io::Write};
+use std::{f32::consts::PI, fs::File, io::Write};
 
-use bevy::{gltf::Gltf, prelude::*, tasks::IoTaskPool};
+use bevy::{gltf::Gltf, prelude::*, scene::SceneInstance, tasks::IoTaskPool};
 use bevy_inspector_egui::{prelude::ReflectInspectorOptions, InspectorOptions};
 use bevy_prototype_debug_lines::DebugLinesMesh;
 use bevy_reflect::Reflect;
-use egui::Align2;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
     state::NextState,
@@ -26,9 +25,11 @@ use crate::{
     },
     level::{
         level_instance::{LevelGridEntity, LevelInstance},
-        level_template::{EntityTemplate, LevelTemplate, LoadedLevel, LoadingLevel, Model},
+        level_template::{
+            EntityTemplate, LevelTemplate, LoadedLevel, LoadingLevel, Model, ModelId,
+        },
     },
-    library::GameAssets,
+    library::{AssetLibrary, GameAssets},
     tools::{
         cameras::{camera_3d_free, EditorCamera},
         picking::PickingCameraBundle,
@@ -94,7 +95,9 @@ impl Plugin for EditorPlugin {
                     .with_system(move_selected_snake_system)
                     .with_system(resize_selected_snake_system)
                     .with_system(despawn_snake_part_system)
-                    .with_system(ui_editor)
+                    .with_system(assign_model_to_wall)
+                    .with_system(rotate_selected_entity_system)
+                    // .with_system(ui_editor)
                     .into(),
             )
             .add_system_set(
@@ -171,19 +174,19 @@ fn choose_entity_to_add_system(
     keyboard: Res<Input<KeyCode>>,
     mut editor_state: ResMut<EditorState>,
 ) {
-    if keyboard.just_pressed(KeyCode::G) {
+    if keyboard.just_pressed(KeyCode::Key7) {
         editor_state.insert_entity_type = EntityType::Goal;
-    } else if keyboard.just_pressed(KeyCode::F) {
+    } else if keyboard.just_pressed(KeyCode::Key6) {
         editor_state.insert_entity_type = EntityType::Food;
-    } else if keyboard.just_pressed(KeyCode::H) {
+    } else if keyboard.just_pressed(KeyCode::Key1) {
         editor_state.insert_entity_type = EntityType::Wall;
-    } else if keyboard.just_pressed(KeyCode::K) {
+    } else if keyboard.just_pressed(KeyCode::Key2) {
         editor_state.insert_entity_type = EntityType::Spike;
-    } else if keyboard.just_pressed(KeyCode::B) {
+    } else if keyboard.just_pressed(KeyCode::Key3) {
         editor_state.insert_entity_type = EntityType::Box;
-    } else if keyboard.just_pressed(KeyCode::T) {
+    } else if keyboard.just_pressed(KeyCode::Key4) {
         editor_state.insert_entity_type = EntityType::Trigger;
-    } else if keyboard.just_pressed(KeyCode::L) {
+    } else if keyboard.just_pressed(KeyCode::Key5) {
         editor_state.insert_entity_type = EntityType::Snake;
     }
 }
@@ -462,6 +465,31 @@ fn resize_selected_snake_system(
     }
 }
 
+fn rotate_selected_entity_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut selection: Query<(&mut Transform, &Selection), With<GridEntity>>,
+) {
+    let rotation = if keyboard.just_pressed(KeyCode::Minus) {
+        Some(Quat::from_euler(EulerRot::XYZ, 0.0, 0.5 * PI, 0.0))
+    } else if keyboard.just_pressed(KeyCode::Equals) {
+        Some(Quat::from_euler(EulerRot::XYZ, 0.0, -0.5 * PI, 0.0))
+    } else {
+        None
+    };
+
+    let Some(rotation) = rotation else {
+        return;
+    };
+
+    for (mut transform, selection) in selection.iter_mut() {
+        if !selection.selected() {
+            continue;
+        }
+
+        transform.rotate(rotation);
+    }
+}
+
 fn delete_selected_entity_system(
     mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
@@ -479,6 +507,88 @@ fn delete_selected_entity_system(
 
         level_instance.set_empty(grid_entity.position);
         commands.entity(entity).despawn();
+    }
+}
+
+trait OptionSelector {
+    fn option_pressed(&self) -> Option<usize>;
+}
+
+impl OptionSelector for Input<KeyCode> {
+    fn option_pressed(&self) -> Option<usize> {
+        if self.just_pressed(KeyCode::Key1) {
+            Some(1)
+        } else if self.just_pressed(KeyCode::Key2) {
+            Some(2)
+        } else if self.just_pressed(KeyCode::Key3) {
+            Some(3)
+        } else if self.just_pressed(KeyCode::Key4) {
+            Some(4)
+        } else if self.just_pressed(KeyCode::Key5) {
+            Some(5)
+        } else if self.just_pressed(KeyCode::Key6) {
+            Some(6)
+        } else if self.just_pressed(KeyCode::Key7) {
+            Some(7)
+        } else if self.just_pressed(KeyCode::Key8) {
+            Some(8)
+        } else if self.just_pressed(KeyCode::Key9) {
+            Some(9)
+        } else if self.just_pressed(KeyCode::Key0) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+}
+
+fn assign_model_to_wall(
+    mut commands: Commands,
+    keyboard: Res<Input<KeyCode>>,
+    selection: Query<(Entity, &GridEntity, &Selection)>,
+    gltfs: Res<Assets<Gltf>>,
+    library: Res<AssetLibrary>,
+) {
+    let Some(mesh_index) = keyboard.option_pressed() else {
+        return;
+    };
+
+    let wall_kitchen_walls = vec![
+        "models/kitchen1.gltf",
+        "models/kitchen2.gltf",
+        "models/kitchen3.gltf",
+    ];
+
+    for (entity, grid_entity, selection) in &selection {
+        if !selection.selected() || grid_entity.entity_type != EntityType::Wall {
+            continue;
+        }
+
+        let model = library
+            .models
+            .get(wall_kitchen_walls[mesh_index - 1])
+            .unwrap();
+        let scene = gltfs.get(model).unwrap().scenes[0].clone();
+
+        commands
+            .entity(entity)
+            .remove::<(
+                Handle<Mesh>,
+                Handle<StandardMaterial>,
+                Handle<Scene>,
+                ModelId,
+                SceneInstance,
+            )>()
+            .insert((
+                SceneBundle {
+                    scene,
+                    transform: Transform::from_translation(grid_entity.position.as_vec3()),
+                    ..default()
+                },
+                ModelId {
+                    source_asset: model.clone(),
+                },
+            ));
     }
 }
 
@@ -501,6 +611,7 @@ fn create_new_level(
                 entity_type: EntityType::Wall,
                 model: Model::Default(EntityType::Wall.into()),
                 grid_position: position,
+                ..default()
             })
             .collect(),
         ..default()
@@ -543,7 +654,8 @@ fn save_level_system(
     keyboard: Res<Input<KeyCode>>,
     level_meta: Res<CurrentLevelMetadata>,
     snake_query: Query<&Snake>,
-    entities: Query<&GridEntity>,
+    entities: Query<(&GridEntity, &Transform, Option<&ModelId>)>,
+    assets: Res<AssetServer>,
 ) {
     if !keyboard.pressed(KeyCode::LWin) || !keyboard.just_pressed(KeyCode::S) {
         return;
@@ -556,10 +668,22 @@ fn save_level_system(
             .collect(),
         entities: entities
             .into_iter()
-            .map(|entity| EntityTemplate {
+            .map(|(entity, transform, gltf)| EntityTemplate {
                 entity_type: entity.entity_type,
-                model: Model::Default(entity.entity_type.into()),
+                model: match gltf {
+                    Some(gltf) => Model::Asset(
+                        assets
+                            .get_handle_path(&gltf.source_asset)
+                            .unwrap()
+                            .path()
+                            .to_str()
+                            .unwrap()
+                            .to_owned(),
+                    ),
+                    None => Model::Default(entity.entity_type.into()),
+                },
                 grid_position: entity.position,
+                rotation: transform.rotation,
             })
             .collect(),
     };
@@ -577,16 +701,17 @@ fn save_level_system(
         .detach();
 }
 
-fn ui_editor(world: &mut World) {
-    let egui_context = world
-        .resource_mut::<bevy_egui::EguiContext>()
-        .ctx_mut()
-        .clone();
+// fn ui_editor(world: &mut World) {
+//     let egui_context = world
+//         .resource_mut::<bevy_egui::EguiContext>()
+//         .ctx_mut()
+//         .clone();
 
-//     egui::Area::new("my_area")
-//         .pivot(Align2::RIGHT_TOP)
-//         .fixed_pos(egui::pos2(1080.0, 0.0))
-//         .show(&egui_context, |ui| {
-//             bevy_inspector_egui::bevy_inspector::ui_for_resource::<EditorState>(world, ui);
-//         });
+//     //     egui::Area::new("my_area")
+//     //         .pivot(Align2::RIGHT_TOP)
+//     //         .fixed_pos(egui::pos2(1080.0, 0.0))
+//     //         .show(&egui_context, |ui| {
+//     //             bevy_inspector_egui::bevy_inspector::ui_for_resource::<EditorState>(world, ui);
+//     //         });
+//     // }
 // }

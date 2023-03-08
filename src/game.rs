@@ -16,7 +16,7 @@ use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
 };
-use library::load_assets;
+use library::LibraryPlugin;
 use menus::main_menu::MainMenuPlugin;
 use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
 use menus::MenuPlugin;
@@ -154,8 +154,8 @@ pub fn run(app: &mut App, args: &Args) {
                 .set(WindowPlugin {
                     window: WindowDescriptor {
                         title: "CatSnake".to_string(),
-                        width: 1080.0,
-                        height: 720.0,
+                        width: 1920.0,
+                        height: 1080.0,
                         ..default()
                     },
                     ..default()
@@ -171,6 +171,6 @@ pub fn run(app: &mut App, args: &Args) {
         .add_plugin(SelectLevelMenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })
         .add_plugin(AudioPlugin)
-        .add_startup_system(load_assets)
+        .add_plugin(LibraryPlugin)
         .run();
 }

@@ -34,6 +34,11 @@ pub struct GridEntity {
     pub entity_type: EntityType,
 }
 
+#[derive(Component, Clone)]
+pub struct WallGroup {
+    pub positions: Vec<IVec3>,
+}
+
 impl GridEntity {
     pub fn new(position: IVec3, entity_type: EntityType) -> Self {
         Self {
